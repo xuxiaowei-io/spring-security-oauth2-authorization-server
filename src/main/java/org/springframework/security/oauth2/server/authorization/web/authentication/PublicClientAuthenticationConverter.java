@@ -17,7 +17,7 @@ package org.springframework.security.oauth2.server.authorization.web.authenticat
 
 import java.util.HashMap;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.lang.Nullable;
 import org.springframework.security.core.Authentication;
