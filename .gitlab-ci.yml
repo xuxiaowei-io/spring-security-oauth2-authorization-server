@@ -28,5 +28,5 @@ deploy:
   artifacts:
     paths:
       - target/spring-security-oauth2-authorization-server-*
-  only:
-    - main
+  rules:
+    - if: $CI_COMMIT_BRANCH != "main"
