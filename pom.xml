@@ -2,7 +2,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>io.xuxiaowei.security</groupId>
     <artifactId>spring-security-oauth2-authorization-server</artifactId>
-    <version>0.2.2</version>
+    <version>0.2.3</version>
     <name>spring-security-oauth2-authorization-server</name>
     <description>spring-security-oauth2-authorization-server</description>
     <url>https://spring.io/spring-security</url>
@@ -73,31 +73,31 @@
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-config</artifactId>
             <scope>compile</scope>
-            <version>5.5.4</version>
+            <version>5.5.5</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-oauth2-core</artifactId>
             <scope>compile</scope>
-            <version>5.5.4</version>
+            <version>5.5.5</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-oauth2-jose</artifactId>
             <scope>compile</scope>
-            <version>5.5.4</version>
+            <version>5.5.5</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-oauth2-resource-server</artifactId>
             <scope>compile</scope>
-            <version>5.5.4</version>
+            <version>5.5.5</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-web</artifactId>
             <scope>compile</scope>
-            <version>5.5.4</version>
+            <version>5.5.5</version>
         </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
@@ -109,7 +109,7 @@
                     <groupId>commons-logging</groupId>
                 </exclusion>
             </exclusions>
-            <version>5.3.15</version>
+            <version>5.3.16</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
@@ -123,7 +123,7 @@
             <artifactId>spring-jdbc</artifactId>
             <scope>compile</scope>
             <optional>true</optional>
-            <version>5.3.15</version>
+            <version>5.3.16</version>
         </dependency>
         <dependency>
             <groupId>javax.servlet</groupId>
@@ -171,19 +171,19 @@
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
-            <version>5.5.4</version>
+            <version>5.5.5</version>
         </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-test</artifactId>
             <scope>test</scope>
-            <version>5.3.15</version>
+            <version>5.3.16</version>
         </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-webmvc</artifactId>
             <scope>test</scope>
-            <version>5.3.15</version>
+            <version>5.3.16</version>
         </dependency>
     </dependencies>
 
