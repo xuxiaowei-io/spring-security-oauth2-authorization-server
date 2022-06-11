@@ -28,6 +28,7 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.OAuth2TokenType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
@@ -38,7 +39,6 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.util.Assert;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 /**
@@ -55,6 +55,7 @@ import org.springframework.util.StringUtils;
  * @see PasswordEncoder
  */
 public final class OAuth2ClientAuthenticationProvider implements AuthenticationProvider {
+	private static final String CLIENT_AUTHENTICATION_ERROR_URI = "https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-01#section-3.2.1";
 	private static final OAuth2TokenType AUTHORIZATION_CODE_TOKEN_TYPE = new OAuth2TokenType(OAuth2ParameterNames.CODE);
 	private final RegisteredClientRepository registeredClientRepository;
 	private final OAuth2AuthorizationService authorizationService;
@@ -96,28 +97,28 @@ public final class OAuth2ClientAuthenticationProvider implements AuthenticationP
 		String clientId = clientAuthentication.getPrincipal().toString();
 		RegisteredClient registeredClient = this.registeredClientRepository.findByClientId(clientId);
 		if (registeredClient == null) {
-			throwInvalidClient();
+			throwInvalidClient(OAuth2ParameterNames.CLIENT_ID);
 		}
 
 		if (!registeredClient.getClientAuthenticationMethods().contains(
 				clientAuthentication.getClientAuthenticationMethod())) {
-			throwInvalidClient();
+			throwInvalidClient("authentication_method");
 		}
 
-		boolean authenticatedCredentials = false;
+		boolean credentialsAuthenticated = false;
 
 		if (clientAuthentication.getCredentials() != null) {
 			String clientSecret = clientAuthentication.getCredentials().toString();
 			if (!this.passwordEncoder.matches(clientSecret, registeredClient.getClientSecret())) {
-				throwInvalidClient();
+				throwInvalidClient(OAuth2ParameterNames.CLIENT_SECRET);
 			}
-			authenticatedCredentials = true;
+			credentialsAuthenticated = true;
 		}
 
-		authenticatedCredentials = authenticatedCredentials ||
-				authenticatePkceIfAvailable(clientAuthentication, registeredClient);
-		if (!authenticatedCredentials) {
-			throwInvalidClient();
+		boolean pkceAuthenticated = authenticatePkceIfAvailable(clientAuthentication, registeredClient);
+		credentialsAuthenticated = credentialsAuthenticated || pkceAuthenticated;
+		if (!credentialsAuthenticated) {
+			throwInvalidClient("credentials");
 		}
 
 		return new OAuth2ClientAuthenticationToken(registeredClient,
@@ -133,7 +134,7 @@ public final class OAuth2ClientAuthenticationProvider implements AuthenticationP
 			RegisteredClient registeredClient) {
 
 		Map<String, Object> parameters = clientAuthentication.getAdditionalParameters();
-		if (CollectionUtils.isEmpty(parameters) || !authorizationCodeGrant(parameters)) {
+		if (!authorizationCodeGrant(parameters)) {
 			return false;
 		}
 
@@ -141,7 +142,7 @@ public final class OAuth2ClientAuthenticationProvider implements AuthenticationP
 				(String) parameters.get(OAuth2ParameterNames.CODE),
 				AUTHORIZATION_CODE_TOKEN_TYPE);
 		if (authorization == null) {
-			throwInvalidClient();
+			throwInvalidClient(OAuth2ParameterNames.CODE);
 		}
 
 		OAuth2AuthorizationRequest authorizationRequest = authorization.getAttribute(
@@ -149,16 +150,19 @@ public final class OAuth2ClientAuthenticationProvider implements AuthenticationP
 
 		String codeChallenge = (String) authorizationRequest.getAdditionalParameters()
 				.get(PkceParameterNames.CODE_CHALLENGE);
-		if (!StringUtils.hasText(codeChallenge) &&
-				registeredClient.getClientSettings().isRequireProofKey()) {
-			throwInvalidClient();
+		if (!StringUtils.hasText(codeChallenge)) {
+			if (registeredClient.getClientSettings().isRequireProofKey()) {
+				throwInvalidClient(PkceParameterNames.CODE_CHALLENGE);
+			} else {
+				return false;
+			}
 		}
 
 		String codeChallengeMethod = (String) authorizationRequest.getAdditionalParameters()
 				.get(PkceParameterNames.CODE_CHALLENGE_METHOD);
 		String codeVerifier = (String) parameters.get(PkceParameterNames.CODE_VERIFIER);
 		if (!codeVerifierValid(codeVerifier, codeChallenge, codeChallengeMethod)) {
-			throwInvalidClient();
+			throwInvalidClient(PkceParameterNames.CODE_VERIFIER);
 		}
 
 		return true;
@@ -174,7 +178,7 @@ public final class OAuth2ClientAuthenticationProvider implements AuthenticationP
 		if (!StringUtils.hasText(codeVerifier)) {
 			return false;
 		} else if (!StringUtils.hasText(codeChallengeMethod) || "plain".equals(codeChallengeMethod)) {
-			return  codeVerifier.equals(codeChallenge);
+			return codeVerifier.equals(codeChallenge);
 		} else if ("S256".equals(codeChallengeMethod)) {
 			try {
 				MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -189,7 +193,12 @@ public final class OAuth2ClientAuthenticationProvider implements AuthenticationP
 		throw new OAuth2AuthenticationException(OAuth2ErrorCodes.SERVER_ERROR);
 	}
 
-	private static void throwInvalidClient() {
-		throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_CLIENT);
+	private static void throwInvalidClient(String parameterName) {
+		OAuth2Error error = new OAuth2Error(
+				OAuth2ErrorCodes.INVALID_CLIENT,
+				"Client authentication failed: " + parameterName,
+				CLIENT_AUTHENTICATION_ERROR_URI);
+		throw new OAuth2AuthenticationException(error);
 	}
+
 }
