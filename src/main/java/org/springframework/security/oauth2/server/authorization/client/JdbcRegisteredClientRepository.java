@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,12 +36,12 @@ import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.PreparedStatementSetter;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.SqlParameterValue;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.OAuth2TokenFormat;
 import org.springframework.security.oauth2.server.authorization.config.ClientSettings;
-import org.springframework.security.oauth2.server.authorization.config.ConfigurationSettingNames;
 import org.springframework.security.oauth2.server.authorization.config.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
 import org.springframework.util.Assert;
@@ -95,7 +95,8 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 
 	// @formatter:off
 	private static final String UPDATE_REGISTERED_CLIENT_SQL = "UPDATE " + TABLE_NAME
-			+ " SET client_name = ?, client_authentication_methods = ?, authorization_grant_types = ?,"
+			+ " SET client_secret = ?, client_secret_expires_at = ?,"
+			+ " client_name = ?, client_authentication_methods = ?, authorization_grant_types = ?,"
 			+ " redirect_uris = ?, scopes = ?, client_settings = ?, token_settings = ?"
 			+ " WHERE " + PK_FILTER;
 	// @formatter:on
@@ -133,8 +134,6 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 		SqlParameterValue id = parameters.remove(0);
 		parameters.remove(0); // remove client_id
 		parameters.remove(0); // remove client_id_issued_at
-		parameters.remove(0); // remove client_secret
-		parameters.remove(0); // remove client_secret_expires_at
 		parameters.add(id);
 		PreparedStatementSetter pss = new ArgumentPreparedStatementSetter(parameters.toArray());
 		this.jdbcOperations.update(UPDATE_REGISTERED_CLIENT_SQL, pss);
@@ -242,11 +241,7 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 			builder.clientSettings(ClientSettings.withSettings(clientSettingsMap).build());
 
 			Map<String, Object> tokenSettingsMap = parseMap(rs.getString("token_settings"));
-			TokenSettings.Builder tokenSettingsBuilder = TokenSettings.withSettings(tokenSettingsMap);
-			if (!tokenSettingsMap.containsKey(ConfigurationSettingNames.Token.ACCESS_TOKEN_FORMAT)) {
-				tokenSettingsBuilder.accessTokenFormat(OAuth2TokenFormat.SELF_CONTAINED);
-			}
-			builder.tokenSettings(tokenSettingsBuilder.build());
+			builder.tokenSettings(TokenSettings.withSettings(tokenSettingsMap).build());
 
 			return builder.build();
 		}
@@ -298,6 +293,7 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 	 */
 	public static class RegisteredClientParametersMapper implements Function<RegisteredClient, List<SqlParameterValue>> {
 		private ObjectMapper objectMapper = new ObjectMapper();
+		private PasswordEncoder passwordEncoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
 
 		public RegisteredClientParametersMapper() {
 			ClassLoader classLoader = JdbcRegisteredClientRepository.class.getClassLoader();
@@ -326,7 +322,7 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 					new SqlParameterValue(Types.VARCHAR, registeredClient.getId()),
 					new SqlParameterValue(Types.VARCHAR, registeredClient.getClientId()),
 					new SqlParameterValue(Types.TIMESTAMP, clientIdIssuedAt),
-					new SqlParameterValue(Types.VARCHAR, registeredClient.getClientSecret()),
+					new SqlParameterValue(Types.VARCHAR, encode(registeredClient.getClientSecret())),
 					new SqlParameterValue(Types.TIMESTAMP, clientSecretExpiresAt),
 					new SqlParameterValue(Types.VARCHAR, registeredClient.getClientName()),
 					new SqlParameterValue(Types.VARCHAR, StringUtils.collectionToCommaDelimitedString(clientAuthenticationMethods)),
@@ -342,6 +338,12 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 			this.objectMapper = objectMapper;
 		}
 
+
+		public final void setPasswordEncoder(PasswordEncoder passwordEncoder) {
+			Assert.notNull(passwordEncoder, "passwordEncoder cannot be null");
+			this.passwordEncoder = passwordEncoder;
+		}
+
 		protected final ObjectMapper getObjectMapper() {
 			return this.objectMapper;
 		}
@@ -352,6 +354,13 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 			} catch (Exception ex) {
 				throw new IllegalArgumentException(ex.getMessage(), ex);
 			}
+		}
+
+		private String encode(String value) {
+			if (value != null) {
+				return this.passwordEncoder.encode(value);
+			}
+			return null;
 		}
 
 	}

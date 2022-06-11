@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,15 +24,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
-import org.springframework.lang.Nullable;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.keygen.Base64StringKeyGenerator;
 import org.springframework.security.crypto.keygen.StringKeyGenerator;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
@@ -52,10 +50,6 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
-import org.springframework.security.oauth2.server.authorization.context.ProviderContextHolder;
-import org.springframework.security.oauth2.server.authorization.token.DefaultOAuth2TokenContext;
-import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
-import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponents;
@@ -66,7 +60,6 @@ import org.springframework.web.util.UriComponentsBuilder;
  * used in the Authorization Code Grant.
  *
  * @author Joe Grandja
- * @author Steve Riesenberg
  * @since 0.1.2
  * @see OAuth2AuthorizationCodeRequestAuthenticationToken
  * @see OAuth2AuthorizationCodeAuthenticationProvider
@@ -76,9 +69,10 @@ import org.springframework.web.util.UriComponentsBuilder;
  * @see <a target="_blank" href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1">Section 4.1.1 Authorization Request</a>
  */
 public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implements AuthenticationProvider {
-	private static final String ERROR_URI = "https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1";
-	private static final String PKCE_ERROR_URI = "https://datatracker.ietf.org/doc/html/rfc7636#section-4.4.1";
 	private static final OAuth2TokenType STATE_TOKEN_TYPE = new OAuth2TokenType(OAuth2ParameterNames.STATE);
+	private static final String PKCE_ERROR_URI = "https://datatracker.ietf.org/doc/html/rfc7636#section-4.4.1";
+	private static final StringKeyGenerator DEFAULT_AUTHORIZATION_CODE_GENERATOR =
+			new Base64StringKeyGenerator(Base64.getUrlEncoder().withoutPadding(), 96);
 	private static final StringKeyGenerator DEFAULT_STATE_GENERATOR =
 			new Base64StringKeyGenerator(Base64.getUrlEncoder());
 	private static final Function<String, OAuth2AuthenticationValidator> DEFAULT_AUTHENTICATION_VALIDATOR_RESOLVER =
@@ -86,9 +80,8 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 	private final RegisteredClientRepository registeredClientRepository;
 	private final OAuth2AuthorizationService authorizationService;
 	private final OAuth2AuthorizationConsentService authorizationConsentService;
-	private OAuth2TokenGenerator<OAuth2AuthorizationCode> authorizationCodeGenerator = new OAuth2AuthorizationCodeGenerator();
+	private Supplier<String> authorizationCodeGenerator = DEFAULT_AUTHORIZATION_CODE_GENERATOR::generateKey;
 	private Function<String, OAuth2AuthenticationValidator> authenticationValidatorResolver = DEFAULT_AUTHENTICATION_VALIDATOR_RESOLVER;
-	private Consumer<OAuth2AuthorizationConsentAuthenticationContext> authorizationConsentCustomizer;
 
 	/**
 	 * Constructs an {@code OAuth2AuthorizationCodeRequestAuthenticationProvider} using the provided parameters.
@@ -123,12 +116,11 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 	}
 
 	/**
-	 * Sets the {@link OAuth2TokenGenerator} that generates the {@link OAuth2AuthorizationCode}.
+	 * Sets the {@code Supplier<String>} that generates the value for the {@link OAuth2AuthorizationCode}.
 	 *
-	 * @param authorizationCodeGenerator the {@link OAuth2TokenGenerator} that generates the {@link OAuth2AuthorizationCode}
-	 * @since 0.2.3
+	 * @param authorizationCodeGenerator the {@code Supplier<String>} that generates the value for the {@link OAuth2AuthorizationCode}
 	 */
-	public void setAuthorizationCodeGenerator(OAuth2TokenGenerator<OAuth2AuthorizationCode> authorizationCodeGenerator) {
+	public void setAuthorizationCodeGenerator(Supplier<String> authorizationCodeGenerator) {
 		Assert.notNull(authorizationCodeGenerator, "authorizationCodeGenerator cannot be null");
 		this.authorizationCodeGenerator = authorizationCodeGenerator;
 	}
@@ -151,31 +143,6 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 	public void setAuthenticationValidatorResolver(Function<String, OAuth2AuthenticationValidator> authenticationValidatorResolver) {
 		Assert.notNull(authenticationValidatorResolver, "authenticationValidatorResolver cannot be null");
 		this.authenticationValidatorResolver = authenticationValidatorResolver;
-	}
-
-	/**
-	 * Sets the {@code Consumer} providing access to the {@link OAuth2AuthorizationConsentAuthenticationContext}
-	 * containing an {@link OAuth2AuthorizationConsent.Builder} and additional context information.
-	 *
-	 * <p>
-	 * The following context attributes are available:
-	 * <ul>
-	 * <li>The {@link OAuth2AuthorizationConsent.Builder} used to build the authorization consent
-	 * prior to {@link OAuth2AuthorizationConsentService#save(OAuth2AuthorizationConsent)}.</li>
-	 * <li>The {@link Authentication} of type
-	 * {@link OAuth2AuthorizationCodeRequestAuthenticationToken}.</li>
-	 * <li>The {@link RegisteredClient} associated with the authorization request.</li>
-	 * <li>The {@link OAuth2Authorization} associated with the state token presented in the
-	 * authorization consent request.</li>
-	 * <li>The {@link OAuth2AuthorizationRequest} associated with the authorization consent request.</li>
-	 * </ul>
-	 *
-	 * @param authorizationConsentCustomizer the {@code Consumer} providing access to the
-	 * {@link OAuth2AuthorizationConsentAuthenticationContext} containing an {@link OAuth2AuthorizationConsent.Builder}
-	 */
-	public void setAuthorizationConsentCustomizer(Consumer<OAuth2AuthorizationConsentAuthenticationContext> authorizationConsentCustomizer) {
-		Assert.notNull(authorizationConsentCustomizer, "authorizationConsentCustomizer cannot be null");
-		this.authorizationConsentCustomizer = authorizationConsentCustomizer;
 	}
 
 	private Authentication authenticateAuthorizationRequest(Authentication authentication) throws AuthenticationException {
@@ -210,7 +177,7 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 		if (StringUtils.hasText(codeChallenge)) {
 			String codeChallengeMethod = (String) authorizationCodeRequestAuthentication.getAdditionalParameters().get(PkceParameterNames.CODE_CHALLENGE_METHOD);
 			if (StringUtils.hasText(codeChallengeMethod)) {
-				if (!"S256".equals(codeChallengeMethod)) {
+				if (!"S256".equals(codeChallengeMethod) && !"plain".equals(codeChallengeMethod)) {
 					throwError(OAuth2ErrorCodes.INVALID_REQUEST, PkceParameterNames.CODE_CHALLENGE_METHOD, PKCE_ERROR_URI,
 							authorizationCodeRequestAuthentication, registeredClient, null);
 				}
@@ -249,6 +216,8 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 					.build();
 			this.authorizationService.save(authorization);
 
+			// TODO Need to remove 'in-flight' authorization if consent step is not completed (e.g. approved or cancelled)
+
 			Set<String> currentAuthorizedScopes = currentAuthorizationConsent != null ?
 					currentAuthorizationConsent.getScopes() : null;
 
@@ -260,15 +229,7 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 					.build();
 		}
 
-		OAuth2TokenContext tokenContext = createAuthorizationCodeTokenContext(
-				authorizationCodeRequestAuthentication, registeredClient, null, authorizationRequest.getScopes());
-		OAuth2AuthorizationCode authorizationCode = this.authorizationCodeGenerator.generate(tokenContext);
-		if (authorizationCode == null) {
-			OAuth2Error error = new OAuth2Error(OAuth2ErrorCodes.SERVER_ERROR,
-					"The token generator failed to generate the authorization code.", ERROR_URI);
-			throw new OAuth2AuthorizationCodeRequestAuthenticationException(error, null);
-		}
-
+		OAuth2AuthorizationCode authorizationCode = generateAuthorizationCode();
 		OAuth2Authorization authorization = authorizationBuilder(registeredClient, principal, authorizationRequest)
 				.token(authorizationCode)
 				.attribute(OAuth2Authorization.AUTHORIZED_SCOPE_ATTRIBUTE_NAME, authorizationRequest.getScopes())
@@ -294,6 +255,12 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 		return authenticationValidator != null ?
 				authenticationValidator :
 				DEFAULT_AUTHENTICATION_VALIDATOR_RESOLVER.apply(parameterName);
+	}
+
+	private OAuth2AuthorizationCode generateAuthorizationCode() {
+		Instant issuedAt = Instant.now();
+		Instant expiresAt = issuedAt.plus(5, ChronoUnit.MINUTES);		// TODO Allow configuration for authorization code time-to-live
+		return new OAuth2AuthorizationCode(this.authorizationCodeGenerator.get(), issuedAt, expiresAt);
 	}
 
 	private Authentication authenticateAuthorizationConsent(Authentication authentication) throws AuthenticationException {
@@ -334,6 +301,18 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 		Set<String> currentAuthorizedScopes = currentAuthorizationConsent != null ?
 				currentAuthorizationConsent.getScopes() : Collections.emptySet();
 
+		if (authorizedScopes.isEmpty() && currentAuthorizedScopes.isEmpty()) {
+			// Authorization consent denied
+			this.authorizationService.remove(authorization);
+			throwError(OAuth2ErrorCodes.ACCESS_DENIED, OAuth2ParameterNames.CLIENT_ID,
+					authorizationCodeRequestAuthentication, registeredClient, authorizationRequest);
+		}
+
+		if (requestedScopes.contains(OidcScopes.OPENID)) {
+			// 'openid' scope is auto-approved as it does not require consent
+			authorizedScopes.add(OidcScopes.OPENID);
+		}
+
 		if (!currentAuthorizedScopes.isEmpty()) {
 			for (String requestedScope : requestedScopes) {
 				if (currentAuthorizedScopes.contains(requestedScope)) {
@@ -342,59 +321,20 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 			}
 		}
 
-		if (!authorizedScopes.isEmpty() && requestedScopes.contains(OidcScopes.OPENID)) {
-			// 'openid' scope is auto-approved as it does not require consent
-			authorizedScopes.add(OidcScopes.OPENID);
-		}
-
-		OAuth2AuthorizationConsent.Builder authorizationConsentBuilder;
-		if (currentAuthorizationConsent != null) {
-			authorizationConsentBuilder = OAuth2AuthorizationConsent.from(currentAuthorizationConsent);
-		} else {
-			authorizationConsentBuilder = OAuth2AuthorizationConsent.withId(
-					authorization.getRegisteredClientId(), authorization.getPrincipalName());
-		}
-		authorizedScopes.forEach(authorizationConsentBuilder::scope);
-
-		if (this.authorizationConsentCustomizer != null) {
-			// @formatter:off
-			OAuth2AuthorizationConsentAuthenticationContext authorizationConsentAuthenticationContext =
-					OAuth2AuthorizationConsentAuthenticationContext.with(authorizationCodeRequestAuthentication)
-							.authorizationConsent(authorizationConsentBuilder)
-							.registeredClient(registeredClient)
-							.authorization(authorization)
-							.authorizationRequest(authorizationRequest)
-							.build();
-			// @formatter:on
-			this.authorizationConsentCustomizer.accept(authorizationConsentAuthenticationContext);
-		}
-
-		Set<GrantedAuthority> authorities = new HashSet<>();
-		authorizationConsentBuilder.authorities(authorities::addAll);
-
-		if (authorities.isEmpty()) {
-			// Authorization consent denied (or revoked)
+		if (!authorizedScopes.isEmpty() && !authorizedScopes.equals(currentAuthorizedScopes)) {
+			OAuth2AuthorizationConsent.Builder authorizationConsentBuilder;
 			if (currentAuthorizationConsent != null) {
-				this.authorizationConsentService.remove(currentAuthorizationConsent);
+				authorizationConsentBuilder = OAuth2AuthorizationConsent.from(currentAuthorizationConsent);
+			} else {
+				authorizationConsentBuilder = OAuth2AuthorizationConsent.withId(
+						authorization.getRegisteredClientId(), authorization.getPrincipalName());
 			}
-			this.authorizationService.remove(authorization);
-			throwError(OAuth2ErrorCodes.ACCESS_DENIED, OAuth2ParameterNames.CLIENT_ID,
-					authorizationCodeRequestAuthentication, registeredClient, authorizationRequest);
-		}
-
-		OAuth2AuthorizationConsent authorizationConsent = authorizationConsentBuilder.build();
-		if (!authorizationConsent.equals(currentAuthorizationConsent)) {
+			authorizedScopes.forEach(authorizationConsentBuilder::scope);
+			OAuth2AuthorizationConsent authorizationConsent = authorizationConsentBuilder.build();
 			this.authorizationConsentService.save(authorizationConsent);
 		}
 
-		OAuth2TokenContext tokenContext = createAuthorizationCodeTokenContext(
-				authorizationCodeRequestAuthentication, registeredClient, authorization, authorizedScopes);
-		OAuth2AuthorizationCode authorizationCode = this.authorizationCodeGenerator.generate(tokenContext);
-		if (authorizationCode == null) {
-			OAuth2Error error = new OAuth2Error(OAuth2ErrorCodes.SERVER_ERROR,
-					"The token generator failed to generate the authorization code.", ERROR_URI);
-			throw new OAuth2AuthorizationCodeRequestAuthenticationException(error, null);
-		}
+		OAuth2AuthorizationCode authorizationCode = generateAuthorizationCode();
 
 		OAuth2Authorization updatedAuthorization = OAuth2Authorization.from(authorization)
 				.token(authorizationCode)
@@ -433,28 +373,6 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 				.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
 				.attribute(Principal.class.getName(), principal)
 				.attribute(OAuth2AuthorizationRequest.class.getName(), authorizationRequest);
-	}
-
-	private static OAuth2TokenContext createAuthorizationCodeTokenContext(
-			OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthentication,
-			RegisteredClient registeredClient, OAuth2Authorization authorization, Set<String> authorizedScopes) {
-
-		// @formatter:off
-		DefaultOAuth2TokenContext.Builder tokenContextBuilder = DefaultOAuth2TokenContext.builder()
-				.registeredClient(registeredClient)
-				.principal((Authentication) authorizationCodeRequestAuthentication.getPrincipal())
-				.providerContext(ProviderContextHolder.getProviderContext())
-				.tokenType(new OAuth2TokenType(OAuth2ParameterNames.CODE))
-				.authorizedScopes(authorizedScopes)
-				.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-				.authorizationGrant(authorizationCodeRequestAuthentication);
-		// @formatter:on
-
-		if (authorization != null) {
-			tokenContextBuilder.authorization(authorization);
-		}
-
-		return tokenContextBuilder.build();
 	}
 
 	private static boolean requireAuthorizationConsent(RegisteredClient registeredClient,
@@ -555,7 +473,7 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 	private static void throwError(String errorCode, String parameterName,
 			OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthentication,
 			RegisteredClient registeredClient, OAuth2AuthorizationRequest authorizationRequest) {
-		throwError(errorCode, parameterName, ERROR_URI,
+		throwError(errorCode, parameterName, "https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1",
 				authorizationCodeRequestAuthentication, registeredClient, authorizationRequest);
 	}
 
@@ -610,25 +528,9 @@ public final class OAuth2AuthorizationCodeRequestAuthenticationProvider implemen
 				.scopes(authorizationCodeRequestAuthentication.getScopes())
 				.state(authorizationCodeRequestAuthentication.getState())
 				.additionalParameters(authorizationCodeRequestAuthentication.getAdditionalParameters())
+				.consentRequired(authorizationCodeRequestAuthentication.isConsentRequired())
+				.consent(authorizationCodeRequestAuthentication.isConsent())
 				.authorizationCode(authorizationCodeRequestAuthentication.getAuthorizationCode());
-	}
-
-	private static class OAuth2AuthorizationCodeGenerator implements OAuth2TokenGenerator<OAuth2AuthorizationCode> {
-		private final StringKeyGenerator authorizationCodeGenerator =
-				new Base64StringKeyGenerator(Base64.getUrlEncoder().withoutPadding(), 96);
-
-		@Nullable
-		@Override
-		public OAuth2AuthorizationCode generate(OAuth2TokenContext context) {
-			if (context.getTokenType() == null ||
-					!OAuth2ParameterNames.CODE.equals(context.getTokenType().getValue())) {
-				return null;
-			}
-			Instant issuedAt = Instant.now();
-			Instant expiresAt = issuedAt.plus(5, ChronoUnit.MINUTES);		// TODO Allow configuration for authorization code time-to-live
-			return new OAuth2AuthorizationCode(this.authorizationCodeGenerator.generateKey(), issuedAt, expiresAt);
-		}
-
 	}
 
 	private static class DefaultRedirectUriOAuth2AuthenticationValidator implements OAuth2AuthenticationValidator {

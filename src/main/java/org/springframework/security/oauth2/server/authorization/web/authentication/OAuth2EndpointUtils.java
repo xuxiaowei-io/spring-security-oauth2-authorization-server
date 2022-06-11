@@ -15,8 +15,6 @@
  */
 package org.springframework.security.oauth2.server.authorization.web.authentication;
 
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 import javax.servlet.http.HttpServletRequest;
@@ -54,25 +52,10 @@ final class OAuth2EndpointUtils {
 		return parameters;
 	}
 
-	static Map<String, Object> getParametersIfMatchesAuthorizationCodeGrantRequest(HttpServletRequest request, String... exclusions) {
-		if (!matchesAuthorizationCodeGrantRequest(request)) {
-			return Collections.emptyMap();
-		}
-		Map<String, Object> parameters = new HashMap<>(getParameters(request).toSingleValueMap());
-		for (String exclusion : exclusions) {
-			parameters.remove(exclusion);
-		}
-		return parameters;
-	}
-
-	static boolean matchesAuthorizationCodeGrantRequest(HttpServletRequest request) {
+	static boolean matchesPkceTokenRequest(HttpServletRequest request) {
 		return AuthorizationGrantType.AUTHORIZATION_CODE.getValue().equals(
 				request.getParameter(OAuth2ParameterNames.GRANT_TYPE)) &&
-				request.getParameter(OAuth2ParameterNames.CODE) != null;
-	}
-
-	static boolean matchesPkceTokenRequest(HttpServletRequest request) {
-		return matchesAuthorizationCodeGrantRequest(request) &&
+				request.getParameter(OAuth2ParameterNames.CODE) != null &&
 				request.getParameter(PkceParameterNames.CODE_VERIFIER) != null;
 	}
 

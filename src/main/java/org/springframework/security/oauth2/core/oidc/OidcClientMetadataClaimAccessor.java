@@ -15,15 +15,11 @@
  */
 package org.springframework.security.oauth2.core.oidc;
 
-import java.net.URL;
 import java.time.Instant;
 import java.util.List;
 
 import org.springframework.security.oauth2.core.ClaimAccessor;
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.jose.jws.JwsAlgorithm;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
-import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
  * A {@link ClaimAccessor} for the "claims" that are contained
@@ -103,18 +99,6 @@ public interface OidcClientMetadataClaimAccessor extends ClaimAccessor {
 	}
 
 	/**
-	 * Returns the {@link JwsAlgorithm JWS} algorithm that must be used for signing the {@link Jwt JWT} used to authenticate
-	 * the Client at the Token Endpoint for the {@link ClientAuthenticationMethod#PRIVATE_KEY_JWT private_key_jwt} and
-	 * {@link ClientAuthenticationMethod#CLIENT_SECRET_JWT client_secret_jwt} authentication methods {@code (token_endpoint_auth_signing_alg)}.
-	 *
-	 * @return the {@link JwsAlgorithm JWS} algorithm that must be used for signing the {@link Jwt JWT} used to authenticate the Client at the Token Endpoint
-	 * @since 0.2.2
-	 */
-	default String getTokenEndpointAuthenticationSigningAlgorithm() {
-		return getClaimAsString(OidcClientMetadataClaimNames.TOKEN_ENDPOINT_AUTH_SIGNING_ALG);
-	}
-
-	/**
 	 * Returns the OAuth 2.0 {@code grant_type} values that the Client will restrict itself to using {@code (grant_types)}.
 	 *
 	 * @return the OAuth 2.0 {@code grant_type} values that the Client will restrict itself to using
@@ -142,42 +126,12 @@ public interface OidcClientMetadataClaimAccessor extends ClaimAccessor {
 	}
 
 	/**
-	 * Returns the {@code URL} for the Client's JSON Web Key Set {@code (jwks_uri)}.
-	 *
-	 * @return the {@code URL} for the Client's JSON Web Key Set {@code (jwks_uri)}
-	 * @since 0.2.2
-	 */
-	default URL getJwkSetUrl() {
-		return getClaimAsURL(OidcClientMetadataClaimNames.JWKS_URI);
-	}
-
-	/**
 	 * Returns the {@link SignatureAlgorithm JWS} algorithm required for signing the {@link OidcIdToken ID Token} issued to the Client {@code (id_token_signed_response_alg)}.
 	 *
 	 * @return the {@link SignatureAlgorithm JWS} algorithm required for signing the {@link OidcIdToken ID Token} issued to the Client
 	 */
 	default String getIdTokenSignedResponseAlgorithm() {
 		return getClaimAsString(OidcClientMetadataClaimNames.ID_TOKEN_SIGNED_RESPONSE_ALG);
-	}
-
-	/**
-	 * Returns the Registration Access Token that can be used at the Client Configuration Endpoint.
-	 *
-	 * @return the Registration Access Token that can be used at the Client Configuration Endpoint
-	 * @since 0.2.1
-	 */
-	default String getRegistrationAccessToken() {
-		return getClaimAsString(OidcClientMetadataClaimNames.REGISTRATION_ACCESS_TOKEN);
-	}
-
-	/**
-	 * Returns the {@code URL} of the Client Configuration Endpoint where the Registration Access Token can be used.
-	 *
-	 * @return the {@code URL} of the Client Configuration Endpoint where the Registration Access Token can be used
-	 * @since 0.2.1
-	 */
-	default URL getRegistrationClientUrl() {
-		return getClaimAsURL(OidcClientMetadataClaimNames.REGISTRATION_CLIENT_URI);
 	}
 
 }

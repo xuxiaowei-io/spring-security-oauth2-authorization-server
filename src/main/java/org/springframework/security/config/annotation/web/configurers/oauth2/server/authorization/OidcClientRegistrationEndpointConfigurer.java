@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import org.springframework.security.oauth2.server.authorization.oidc.authenticat
 import org.springframework.security.oauth2.server.authorization.oidc.web.OidcClientRegistrationEndpointFilter;
 import org.springframework.security.web.access.intercept.FilterSecurityInterceptor;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
-import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
@@ -48,16 +47,13 @@ public final class OidcClientRegistrationEndpointConfigurer extends AbstractOAut
 	@Override
 	<B extends HttpSecurityBuilder<B>> void init(B builder) {
 		ProviderSettings providerSettings = OAuth2ConfigurerUtils.getProviderSettings(builder);
-		this.requestMatcher = new OrRequestMatcher(
-				new AntPathRequestMatcher(providerSettings.getOidcClientRegistrationEndpoint(), HttpMethod.POST.name()),
-				new AntPathRequestMatcher(providerSettings.getOidcClientRegistrationEndpoint(), HttpMethod.GET.name())
-		);
+		this.requestMatcher = new AntPathRequestMatcher(
+				providerSettings.getOidcClientRegistrationEndpoint(), HttpMethod.POST.name());
 
 		OidcClientRegistrationAuthenticationProvider oidcClientRegistrationAuthenticationProvider =
 				new OidcClientRegistrationAuthenticationProvider(
 						OAuth2ConfigurerUtils.getRegisteredClientRepository(builder),
-						OAuth2ConfigurerUtils.getAuthorizationService(builder),
-						OAuth2ConfigurerUtils.getTokenGenerator(builder));
+						OAuth2ConfigurerUtils.getAuthorizationService(builder));
 		builder.authenticationProvider(postProcess(oidcClientRegistrationAuthenticationProvider));
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 package org.springframework.security.oauth2.server.authorization;
 
 import java.nio.charset.StandardCharsets;
-import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -25,7 +24,6 @@ import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,7 +35,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.dao.DataRetrievalFailureException;
 import org.springframework.jdbc.core.ArgumentPreparedStatementSetter;
-import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.PreparedStatementSetter;
 import org.springframework.jdbc.core.RowMapper;
@@ -47,11 +44,11 @@ import org.springframework.jdbc.support.lob.LobCreator;
 import org.springframework.jdbc.support.lob.LobHandler;
 import org.springframework.lang.Nullable;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
+import org.springframework.security.oauth2.core.AbstractOAuth2Token;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2AuthorizationCode;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
-import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.core.OAuth2TokenType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
@@ -73,7 +70,6 @@ import org.springframework.util.StringUtils;
  * therefore MUST be defined in the database schema.
  *
  * @author Ovidiu Popa
- * @author Joe Grandja
  * @since 0.1.2
  * @see OAuth2AuthorizationService
  * @see OAuth2Authorization
@@ -143,8 +139,6 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 
 	private static final String REMOVE_AUTHORIZATION_SQL = "DELETE FROM " + TABLE_NAME + " WHERE " + PK_FILTER;
 
-	private static Map<String, ColumnMetadata> columnMetadataMap;
-
 	private final JdbcOperations jdbcOperations;
 	private final LobHandler lobHandler;
 	private RowMapper<OAuth2Authorization> authorizationRowMapper;
@@ -179,7 +173,6 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 		authorizationRowMapper.setLobHandler(lobHandler);
 		this.authorizationRowMapper = authorizationRowMapper;
 		this.authorizationParametersMapper = new OAuth2AuthorizationParametersMapper();
-		initColumnMetadata(jdbcOperations);
 	}
 
 	@Override
@@ -239,33 +232,30 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 		List<SqlParameterValue> parameters = new ArrayList<>();
 		if (tokenType == null) {
 			parameters.add(new SqlParameterValue(Types.VARCHAR, token));
-			parameters.add(mapToSqlParameter("authorization_code_value", token));
-			parameters.add(mapToSqlParameter("access_token_value", token));
-			parameters.add(mapToSqlParameter("refresh_token_value", token));
+			parameters.add(new SqlParameterValue(Types.BLOB, token.getBytes(StandardCharsets.UTF_8)));
+			parameters.add(new SqlParameterValue(Types.BLOB, token.getBytes(StandardCharsets.UTF_8)));
+			parameters.add(new SqlParameterValue(Types.BLOB, token.getBytes(StandardCharsets.UTF_8)));
 			return findBy(UNKNOWN_TOKEN_TYPE_FILTER, parameters);
 		} else if (OAuth2ParameterNames.STATE.equals(tokenType.getValue())) {
 			parameters.add(new SqlParameterValue(Types.VARCHAR, token));
 			return findBy(STATE_FILTER, parameters);
 		} else if (OAuth2ParameterNames.CODE.equals(tokenType.getValue())) {
-			parameters.add(mapToSqlParameter("authorization_code_value", token));
+			parameters.add(new SqlParameterValue(Types.BLOB, token.getBytes(StandardCharsets.UTF_8)));
 			return findBy(AUTHORIZATION_CODE_FILTER, parameters);
 		} else if (OAuth2TokenType.ACCESS_TOKEN.equals(tokenType)) {
-			parameters.add(mapToSqlParameter("access_token_value", token));
+			parameters.add(new SqlParameterValue(Types.BLOB, token.getBytes(StandardCharsets.UTF_8)));
 			return findBy(ACCESS_TOKEN_FILTER, parameters);
 		} else if (OAuth2TokenType.REFRESH_TOKEN.equals(tokenType)) {
-			parameters.add(mapToSqlParameter("refresh_token_value", token));
+			parameters.add(new SqlParameterValue(Types.BLOB, token.getBytes(StandardCharsets.UTF_8)));
 			return findBy(REFRESH_TOKEN_FILTER, parameters);
 		}
 		return null;
 	}
 
 	private OAuth2Authorization findBy(String filter, List<SqlParameterValue> parameters) {
-		try (LobCreator lobCreator = getLobHandler().getLobCreator()) {
-			PreparedStatementSetter pss = new LobCreatorArgumentPreparedStatementSetter(lobCreator,
-					parameters.toArray());
-			List<OAuth2Authorization> result = getJdbcOperations().query(LOAD_AUTHORIZATION_SQL + filter, pss, getAuthorizationRowMapper());
-			return !result.isEmpty() ? result.get(0) : null;
-		}
+		PreparedStatementSetter pss = new ArgumentPreparedStatementSetter(parameters.toArray());
+		List<OAuth2Authorization> result = this.jdbcOperations.query(LOAD_AUTHORIZATION_SQL + filter, pss, this.authorizationRowMapper);
+		return !result.isEmpty() ? result.get(0) : null;
 	}
 
 	/**
@@ -344,7 +334,7 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			String id = rs.getString("id");
 			String principalName = rs.getString("principal_name");
 			String authorizationGrantType = rs.getString("authorization_grant_type");
-			Map<String, Object> attributes = parseMap(getLobValue(rs, "attributes"));
+			Map<String, Object> attributes = parseMap(rs.getString("attributes"));
 
 			builder.id(id)
 					.principalName(principalName)
@@ -356,25 +346,28 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 				builder.attribute(OAuth2ParameterNames.STATE, state);
 			}
 
+			String tokenValue;
 			Instant tokenIssuedAt;
 			Instant tokenExpiresAt;
-			String authorizationCodeValue = getLobValue(rs, "authorization_code_value");
+			byte[] authorizationCodeValue = this.lobHandler.getBlobAsBytes(rs, "authorization_code_value");
 
-			if (StringUtils.hasText(authorizationCodeValue)) {
+			if (authorizationCodeValue != null) {
+				tokenValue = new String(authorizationCodeValue, StandardCharsets.UTF_8);
 				tokenIssuedAt = rs.getTimestamp("authorization_code_issued_at").toInstant();
 				tokenExpiresAt = rs.getTimestamp("authorization_code_expires_at").toInstant();
-				Map<String, Object> authorizationCodeMetadata = parseMap(getLobValue(rs, "authorization_code_metadata"));
+				Map<String, Object> authorizationCodeMetadata = parseMap(rs.getString("authorization_code_metadata"));
 
 				OAuth2AuthorizationCode authorizationCode = new OAuth2AuthorizationCode(
-						authorizationCodeValue, tokenIssuedAt, tokenExpiresAt);
+						tokenValue, tokenIssuedAt, tokenExpiresAt);
 				builder.token(authorizationCode, (metadata) -> metadata.putAll(authorizationCodeMetadata));
 			}
 
-			String accessTokenValue = getLobValue(rs, "access_token_value");
-			if (StringUtils.hasText(accessTokenValue)) {
+			byte[] accessTokenValue = this.lobHandler.getBlobAsBytes(rs, "access_token_value");
+			if (accessTokenValue != null) {
+				tokenValue = new String(accessTokenValue, StandardCharsets.UTF_8);
 				tokenIssuedAt = rs.getTimestamp("access_token_issued_at").toInstant();
 				tokenExpiresAt = rs.getTimestamp("access_token_expires_at").toInstant();
-				Map<String, Object> accessTokenMetadata = parseMap(getLobValue(rs, "access_token_metadata"));
+				Map<String, Object> accessTokenMetadata = parseMap(rs.getString("access_token_metadata"));
 				OAuth2AccessToken.TokenType tokenType = null;
 				if (OAuth2AccessToken.TokenType.BEARER.getValue().equalsIgnoreCase(rs.getString("access_token_type"))) {
 					tokenType = OAuth2AccessToken.TokenType.BEARER;
@@ -385,52 +378,38 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 				if (accessTokenScopes != null) {
 					scopes = StringUtils.commaDelimitedListToSet(accessTokenScopes);
 				}
-				OAuth2AccessToken accessToken = new OAuth2AccessToken(tokenType, accessTokenValue, tokenIssuedAt, tokenExpiresAt, scopes);
+				OAuth2AccessToken accessToken = new OAuth2AccessToken(tokenType, tokenValue, tokenIssuedAt, tokenExpiresAt, scopes);
 				builder.token(accessToken, (metadata) -> metadata.putAll(accessTokenMetadata));
 			}
 
-			String oidcIdTokenValue = getLobValue(rs, "oidc_id_token_value");
-			if (StringUtils.hasText(oidcIdTokenValue)) {
+			byte[] oidcIdTokenValue = this.lobHandler.getBlobAsBytes(rs, "oidc_id_token_value");
+			if (oidcIdTokenValue != null) {
+				tokenValue = new String(oidcIdTokenValue, StandardCharsets.UTF_8);
 				tokenIssuedAt = rs.getTimestamp("oidc_id_token_issued_at").toInstant();
 				tokenExpiresAt = rs.getTimestamp("oidc_id_token_expires_at").toInstant();
-				Map<String, Object> oidcTokenMetadata = parseMap(getLobValue(rs, "oidc_id_token_metadata"));
+				Map<String, Object> oidcTokenMetadata = parseMap(rs.getString("oidc_id_token_metadata"));
 
 				OidcIdToken oidcToken = new OidcIdToken(
-						oidcIdTokenValue, tokenIssuedAt, tokenExpiresAt, (Map<String, Object>) oidcTokenMetadata.get(OAuth2Authorization.Token.CLAIMS_METADATA_NAME));
+						tokenValue, tokenIssuedAt, tokenExpiresAt, (Map<String, Object>) oidcTokenMetadata.get(OAuth2Authorization.Token.CLAIMS_METADATA_NAME));
 				builder.token(oidcToken, (metadata) -> metadata.putAll(oidcTokenMetadata));
 			}
 
-			String refreshTokenValue = getLobValue(rs, "refresh_token_value");
-			if (StringUtils.hasText(refreshTokenValue)) {
+			byte[] refreshTokenValue = this.lobHandler.getBlobAsBytes(rs, "refresh_token_value");
+			if (refreshTokenValue != null) {
+				tokenValue = new String(refreshTokenValue, StandardCharsets.UTF_8);
 				tokenIssuedAt = rs.getTimestamp("refresh_token_issued_at").toInstant();
 				tokenExpiresAt = null;
 				Timestamp refreshTokenExpiresAt = rs.getTimestamp("refresh_token_expires_at");
 				if (refreshTokenExpiresAt != null) {
 					tokenExpiresAt = refreshTokenExpiresAt.toInstant();
 				}
-				Map<String, Object> refreshTokenMetadata = parseMap(getLobValue(rs, "refresh_token_metadata"));
+				Map<String, Object> refreshTokenMetadata = parseMap(rs.getString("refresh_token_metadata"));
 
 				OAuth2RefreshToken refreshToken = new OAuth2RefreshToken(
-						refreshTokenValue, tokenIssuedAt, tokenExpiresAt);
+						tokenValue, tokenIssuedAt, tokenExpiresAt);
 				builder.token(refreshToken, (metadata) -> metadata.putAll(refreshTokenMetadata));
 			}
 			return builder.build();
-		}
-
-		private String getLobValue(ResultSet rs, String columnName) throws SQLException {
-			String columnValue = null;
-			ColumnMetadata columnMetadata = columnMetadataMap.get(columnName);
-			if (Types.BLOB == columnMetadata.getDataType()) {
-				byte[] columnValueBytes = this.lobHandler.getBlobAsBytes(rs, columnName);
-				if (columnValueBytes != null) {
-					columnValue = new String(columnValueBytes, StandardCharsets.UTF_8);
-				}
-			} else if (Types.CLOB == columnMetadata.getDataType()) {
-				columnValue = this.lobHandler.getClobAsString(rs, columnName);
-			} else {
-				columnValue = rs.getString(columnName);
-			}
-			return columnValue;
 		}
 
 		public final void setLobHandler(LobHandler lobHandler) {
@@ -488,7 +467,7 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			parameters.add(new SqlParameterValue(Types.VARCHAR, authorization.getAuthorizationGrantType().getValue()));
 
 			String attributes = writeMap(authorization.getAttributes());
-			parameters.add(mapToSqlParameter("attributes", attributes));
+			parameters.add(new SqlParameterValue(Types.VARCHAR, attributes));
 
 			String state = null;
 			String authorizationState = authorization.getAttribute(OAuth2ParameterNames.STATE);
@@ -499,14 +478,12 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 
 			OAuth2Authorization.Token<OAuth2AuthorizationCode> authorizationCode =
 					authorization.getToken(OAuth2AuthorizationCode.class);
-			List<SqlParameterValue> authorizationCodeSqlParameters = toSqlParameterList(
-					"authorization_code_value", "authorization_code_metadata", authorizationCode);
+			List<SqlParameterValue> authorizationCodeSqlParameters = toSqlParameterList(authorizationCode);
 			parameters.addAll(authorizationCodeSqlParameters);
 
 			OAuth2Authorization.Token<OAuth2AccessToken> accessToken =
 					authorization.getToken(OAuth2AccessToken.class);
-			List<SqlParameterValue> accessTokenSqlParameters = toSqlParameterList(
-					"access_token_value", "access_token_metadata", accessToken);
+			List<SqlParameterValue> accessTokenSqlParameters = toSqlParameterList(accessToken);
 			parameters.addAll(accessTokenSqlParameters);
 			String accessTokenType = null;
 			String accessTokenScopes = null;
@@ -520,13 +497,11 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			parameters.add(new SqlParameterValue(Types.VARCHAR, accessTokenScopes));
 
 			OAuth2Authorization.Token<OidcIdToken> oidcIdToken = authorization.getToken(OidcIdToken.class);
-			List<SqlParameterValue> oidcIdTokenSqlParameters = toSqlParameterList(
-					"oidc_id_token_value", "oidc_id_token_metadata", oidcIdToken);
+			List<SqlParameterValue> oidcIdTokenSqlParameters = toSqlParameterList(oidcIdToken);
 			parameters.addAll(oidcIdTokenSqlParameters);
 
 			OAuth2Authorization.Token<OAuth2RefreshToken> refreshToken = authorization.getRefreshToken();
-			List<SqlParameterValue> refreshTokenSqlParameters = toSqlParameterList(
-					"refresh_token_value", "refresh_token_metadata", refreshToken);
+			List<SqlParameterValue> refreshTokenSqlParameters = toSqlParameterList(refreshToken);
 			parameters.addAll(refreshTokenSqlParameters);
 			return parameters;
 		}
@@ -540,16 +515,14 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			return this.objectMapper;
 		}
 
-		private <T extends OAuth2Token> List<SqlParameterValue> toSqlParameterList(
-				String tokenColumnName, String tokenMetadataColumnName, OAuth2Authorization.Token<T> token) {
-
+		private <T extends AbstractOAuth2Token> List<SqlParameterValue> toSqlParameterList(OAuth2Authorization.Token<T> token) {
 			List<SqlParameterValue> parameters = new ArrayList<>();
-			String tokenValue = null;
+			byte[] tokenValue = null;
 			Timestamp tokenIssuedAt = null;
 			Timestamp tokenExpiresAt = null;
 			String metadata = null;
 			if (token != null) {
-				tokenValue = token.getToken().getTokenValue();
+				tokenValue = token.getToken().getTokenValue().getBytes(StandardCharsets.UTF_8);
 				if (token.getToken().getIssuedAt() != null) {
 					tokenIssuedAt = Timestamp.from(token.getToken().getIssuedAt());
 				}
@@ -558,11 +531,10 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 				}
 				metadata = writeMap(token.getMetadata());
 			}
-
-			parameters.add(mapToSqlParameter(tokenColumnName, tokenValue));
+			parameters.add(new SqlParameterValue(Types.BLOB, tokenValue));
 			parameters.add(new SqlParameterValue(Types.TIMESTAMP, tokenIssuedAt));
 			parameters.add(new SqlParameterValue(Types.TIMESTAMP, tokenExpiresAt));
-			parameters.add(mapToSqlParameter(tokenMetadataColumnName, metadata));
+			parameters.add(new SqlParameterValue(Types.VARCHAR, metadata));
 			return parameters;
 		}
 
@@ -597,90 +569,10 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 					this.lobCreator.setBlobAsBytes(ps, parameterPosition, valueBytes);
 					return;
 				}
-				if (paramValue.getSqlType() == Types.CLOB) {
-					if (paramValue.getValue() != null) {
-						Assert.isInstanceOf(String.class, paramValue.getValue(),
-								"Value of clob parameter must be String");
-					}
-					String valueString = (String) paramValue.getValue();
-					this.lobCreator.setClobAsString(ps, parameterPosition, valueString);
-					return;
-				}
 			}
 			super.doSetValue(ps, parameterPosition, argValue);
 		}
 
-	}
-
-	private static final class ColumnMetadata {
-		private final String columnName;
-		private final int dataType;
-
-		private ColumnMetadata(String columnName, int dataType) {
-			this.columnName = columnName;
-			this.dataType = dataType;
-		}
-
-		private String getColumnName() {
-			return this.columnName;
-		}
-
-		private int getDataType() {
-			return this.dataType;
-		}
-
-	}
-
-	private static void initColumnMetadata(JdbcOperations jdbcOperations) {
-		columnMetadataMap = new HashMap<>();
-		ColumnMetadata columnMetadata;
-
-		columnMetadata = getColumnMetadata(jdbcOperations, "attributes", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-		columnMetadata = getColumnMetadata(jdbcOperations, "authorization_code_value", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-		columnMetadata = getColumnMetadata(jdbcOperations, "authorization_code_metadata", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-		columnMetadata = getColumnMetadata(jdbcOperations, "access_token_value", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-		columnMetadata = getColumnMetadata(jdbcOperations, "access_token_metadata", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-		columnMetadata = getColumnMetadata(jdbcOperations, "oidc_id_token_value", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-		columnMetadata = getColumnMetadata(jdbcOperations, "oidc_id_token_metadata", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-		columnMetadata = getColumnMetadata(jdbcOperations, "refresh_token_value", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-		columnMetadata = getColumnMetadata(jdbcOperations, "refresh_token_metadata", Types.BLOB);
-		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
-	}
-
-	private static ColumnMetadata getColumnMetadata(JdbcOperations jdbcOperations, String columnName, int defaultDataType) {
-		Integer dataType = jdbcOperations.execute((ConnectionCallback<Integer>) conn -> {
-			DatabaseMetaData databaseMetaData = conn.getMetaData();
-			ResultSet rs = databaseMetaData.getColumns(null, null, TABLE_NAME, columnName);
-			if (rs.next()) {
-				return rs.getInt("DATA_TYPE");
-			}
-			// NOTE: (Applies to HSQL)
-			// When a database object is created with one of the CREATE statements or renamed with the ALTER statement,
-			// if the name is enclosed in double quotes, the exact name is used as the case-normal form.
-			// But if it is not enclosed in double quotes,
-			// the name is converted to uppercase and this uppercase version is stored in the database as the case-normal form.
-			rs = databaseMetaData.getColumns(null, null, TABLE_NAME.toUpperCase(), columnName.toUpperCase());
-			if (rs.next()) {
-				return rs.getInt("DATA_TYPE");
-			}
-			return null;
-		});
-		return new ColumnMetadata(columnName, dataType != null ? dataType : defaultDataType);
-	}
-
-	private static SqlParameterValue mapToSqlParameter(String columnName, String value) {
-		ColumnMetadata columnMetadata = columnMetadataMap.get(columnName);
-		return Types.BLOB == columnMetadata.getDataType() && StringUtils.hasText(value) ?
-				new SqlParameterValue(Types.BLOB, value.getBytes(StandardCharsets.UTF_8)) :
-				new SqlParameterValue(columnMetadata.getDataType(), value);
 	}
 
 }

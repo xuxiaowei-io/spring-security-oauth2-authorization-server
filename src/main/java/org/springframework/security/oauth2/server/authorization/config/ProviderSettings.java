@@ -98,15 +98,6 @@ public final class ProviderSettings extends AbstractSettings {
 	}
 
 	/**
-	 * Returns the Provider's OpenID Connect 1.0 UserInfo endpoint. The default is {@code /userinfo}.
-	 *
-	 * @return the OpenID Connect 1.0 UserInfo endpoint
-	 */
-	public String getOidcUserInfoEndpoint() {
-		return getSetting(ConfigurationSettingNames.Provider.OIDC_USER_INFO_ENDPOINT);
-	}
-
-	/**
 	 * Constructs a new {@link Builder} with the default settings.
 	 *
 	 * @return the {@link Builder}
@@ -118,8 +109,7 @@ public final class ProviderSettings extends AbstractSettings {
 				.jwkSetEndpoint("/oauth2/jwks")
 				.tokenRevocationEndpoint("/oauth2/revoke")
 				.tokenIntrospectionEndpoint("/oauth2/introspect")
-				.oidcClientRegistrationEndpoint("/connect/register")
-				.oidcUserInfoEndpoint("/userinfo");
+				.oidcClientRegistrationEndpoint("/connect/register");
 	}
 
 	/**
@@ -210,16 +200,6 @@ public final class ProviderSettings extends AbstractSettings {
 		 */
 		public Builder oidcClientRegistrationEndpoint(String oidcClientRegistrationEndpoint) {
 			return setting(ConfigurationSettingNames.Provider.OIDC_CLIENT_REGISTRATION_ENDPOINT, oidcClientRegistrationEndpoint);
-		}
-
-		/**
-		 * Sets the Provider's OpenID Connect 1.0 UserInfo endpoint.
-		 *
-		 * @param oidcUserInfoEndpoint the OpenID Connect 1.0 UserInfo endpoint
-		 * @return the {@link Builder} for further configuration
-		 */
-		public Builder oidcUserInfoEndpoint(String oidcUserInfoEndpoint) {
-			return setting(ConfigurationSettingNames.Provider.OIDC_USER_INFO_ENDPOINT, oidcUserInfoEndpoint);
 		}
 
 		/**

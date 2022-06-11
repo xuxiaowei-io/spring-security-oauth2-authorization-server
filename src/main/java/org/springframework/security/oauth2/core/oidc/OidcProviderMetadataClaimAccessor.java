@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 package org.springframework.security.oauth2.core.oidc;
 
 
-import java.net.URL;
 import java.util.List;
 
 import org.springframework.security.oauth2.core.ClaimAccessor;
@@ -55,16 +54,6 @@ public interface OidcProviderMetadataClaimAccessor extends OAuth2AuthorizationSe
 	 */
 	default List<String> getIdTokenSigningAlgorithms() {
 		return getClaimAsStringList(OidcProviderMetadataClaimNames.ID_TOKEN_SIGNING_ALG_VALUES_SUPPORTED);
-	}
-
-	/**
-	 * Returns the {@code URL} of the OpenID Connect 1.0 UserInfo Endpoint {@code (userinfo_endpoint)}.
-	 *
-	 * @return the {@code URL} of the OpenID Connect 1.0 UserInfo Endpoint
-	 * @since 0.2.2
-	 */
-	default URL getUserInfoEndpoint() {
-		return getClaimAsURL(OidcProviderMetadataClaimNames.USER_INFO_ENDPOINT);
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,8 @@ import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.authentication.ClientSecretAuthenticationProvider;
-import org.springframework.security.oauth2.server.authorization.authentication.JwtClientAssertionAuthenticationProvider;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientAuthenticationToken;
-import org.springframework.security.oauth2.server.authorization.authentication.PublicClientAuthenticationProvider;
-import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.ProviderSettings;
 import org.springframework.security.oauth2.server.authorization.web.OAuth2ClientAuthenticationFilter;
 import org.springframework.security.web.authentication.AuthenticationConverter;
@@ -43,7 +39,6 @@ import org.springframework.security.web.authentication.preauth.AbstractPreAuthen
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
-import org.springframework.util.Assert;
 
 /**
  * Configurer for OAuth 2.0 Client Authentication.
@@ -86,7 +81,6 @@ public final class OAuth2ClientAuthenticationConfigurer extends AbstractOAuth2Co
 	 * @return the {@link OAuth2ClientAuthenticationConfigurer} for further configuration
 	 */
 	public OAuth2ClientAuthenticationConfigurer authenticationProvider(AuthenticationProvider authenticationProvider) {
-		Assert.notNull(authenticationProvider, "authenticationProvider cannot be null");
 		this.authenticationProviders.add(authenticationProvider);
 		return this;
 	}
@@ -162,24 +156,15 @@ public final class OAuth2ClientAuthenticationConfigurer extends AbstractOAuth2Co
 	private <B extends HttpSecurityBuilder<B>> List<AuthenticationProvider> createDefaultAuthenticationProviders(B builder) {
 		List<AuthenticationProvider> authenticationProviders = new ArrayList<>();
 
-		RegisteredClientRepository registeredClientRepository = OAuth2ConfigurerUtils.getRegisteredClientRepository(builder);
-		OAuth2AuthorizationService authorizationService = OAuth2ConfigurerUtils.getAuthorizationService(builder);
-
-		JwtClientAssertionAuthenticationProvider jwtClientAssertionAuthenticationProvider =
-				new JwtClientAssertionAuthenticationProvider(registeredClientRepository, authorizationService);
-		authenticationProviders.add(jwtClientAssertionAuthenticationProvider);
-
-		ClientSecretAuthenticationProvider clientSecretAuthenticationProvider =
-				new ClientSecretAuthenticationProvider(registeredClientRepository, authorizationService);
+		OAuth2ClientAuthenticationProvider clientAuthenticationProvider =
+				new OAuth2ClientAuthenticationProvider(
+						OAuth2ConfigurerUtils.getRegisteredClientRepository(builder),
+						OAuth2ConfigurerUtils.getAuthorizationService(builder));
 		PasswordEncoder passwordEncoder = OAuth2ConfigurerUtils.getOptionalBean(builder, PasswordEncoder.class);
 		if (passwordEncoder != null) {
-			clientSecretAuthenticationProvider.setPasswordEncoder(passwordEncoder);
+			clientAuthenticationProvider.setPasswordEncoder(passwordEncoder);
 		}
-		authenticationProviders.add(clientSecretAuthenticationProvider);
-
-		PublicClientAuthenticationProvider publicClientAuthenticationProvider =
-				new PublicClientAuthenticationProvider(registeredClientRepository, authorizationService);
-		authenticationProviders.add(publicClientAuthenticationProvider);
+		authenticationProviders.add(clientAuthenticationProvider);
 
 		return authenticationProviders;
 	}

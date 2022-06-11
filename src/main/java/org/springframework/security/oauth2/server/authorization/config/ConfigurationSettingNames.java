@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,8 @@
  */
 package org.springframework.security.oauth2.server.authorization.config;
 
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.OAuth2TokenFormat;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
-import org.springframework.security.oauth2.jose.jws.JwsAlgorithm;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
-import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
  * The names for all the configuration settings.
@@ -51,20 +47,6 @@ public final class ConfigurationSettingNames {
 		 * This applies to all interactive flows (e.g. {@code authorization_code} and {@code device_code}).
 		 */
 		public static final String REQUIRE_AUTHORIZATION_CONSENT = CLIENT_SETTINGS_NAMESPACE.concat("require-authorization-consent");
-
-		/**
-		 * Set the {@code URL} for the Client's JSON Web Key Set.
-		 * @since 0.2.2
-		 */
-		public static final String JWK_SET_URL = CLIENT_SETTINGS_NAMESPACE.concat("jwk-set-url");
-
-		/**
-		 * Set the {@link JwsAlgorithm JWS} algorithm that must be used for signing the {@link Jwt JWT}
-		 * used to authenticate the Client at the Token Endpoint for the {@link ClientAuthenticationMethod#PRIVATE_KEY_JWT private_key_jwt} and
-		 * {@link ClientAuthenticationMethod#CLIENT_SECRET_JWT client_secret_jwt} authentication methods.
-		 * @since 0.2.2
-		 */
-		public static final String TOKEN_ENDPOINT_AUTHENTICATION_SIGNING_ALGORITHM = CLIENT_SETTINGS_NAMESPACE.concat("token-endpoint-authentication-signing-algorithm");
 
 		private Client() {
 		}
@@ -112,11 +94,6 @@ public final class ConfigurationSettingNames {
 		 */
 		public static final String OIDC_CLIENT_REGISTRATION_ENDPOINT = PROVIDER_SETTINGS_NAMESPACE.concat("oidc-client-registration-endpoint");
 
-		/**
-		 * Set the Provider's OpenID Connect 1.0 UserInfo endpoint.
-		 */
-		public static final String OIDC_USER_INFO_ENDPOINT = PROVIDER_SETTINGS_NAMESPACE.concat("oidc-user-info-endpoint");
-
 		private Provider() {
 		}
 
@@ -132,12 +109,6 @@ public final class ConfigurationSettingNames {
 		 * Set the time-to-live for an access token.
 		 */
 		public static final String ACCESS_TOKEN_TIME_TO_LIVE = TOKEN_SETTINGS_NAMESPACE.concat("access-token-time-to-live");
-
-		/**
-		 * Set the {@link OAuth2TokenFormat token format} for an access token.
-		 * @since 0.2.3
-		 */
-		public static final String ACCESS_TOKEN_FORMAT = TOKEN_SETTINGS_NAMESPACE.concat("access-token-format");
 
 		/**
 		 * Set to {@code true} if refresh tokens are reused when returning the access token response,

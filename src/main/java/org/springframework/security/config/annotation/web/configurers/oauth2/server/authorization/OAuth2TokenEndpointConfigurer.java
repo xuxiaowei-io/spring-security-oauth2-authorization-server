@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,10 @@ import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.HttpSecurityBuilder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AccessTokenResponse;
-import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.server.authorization.JwtEncodingContext;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenCustomizer;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AccessTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationCodeAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationGrantAuthenticationToken;
@@ -45,7 +45,6 @@ import org.springframework.security.web.authentication.AuthenticationFailureHand
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
-import org.springframework.util.Assert;
 
 /**
  * Configurer for the OAuth 2.0 Token Endpoint.
@@ -88,7 +87,6 @@ public final class OAuth2TokenEndpointConfigurer extends AbstractOAuth2Configure
 	 * @return the {@link OAuth2TokenEndpointConfigurer} for further configuration
 	 */
 	public OAuth2TokenEndpointConfigurer authenticationProvider(AuthenticationProvider authenticationProvider) {
-		Assert.notNull(authenticationProvider, "authenticationProvider cannot be null");
 		this.authenticationProviders.add(authenticationProvider);
 		return this;
 	}
@@ -160,19 +158,34 @@ public final class OAuth2TokenEndpointConfigurer extends AbstractOAuth2Configure
 	private <B extends HttpSecurityBuilder<B>> List<AuthenticationProvider> createDefaultAuthenticationProviders(B builder) {
 		List<AuthenticationProvider> authenticationProviders = new ArrayList<>();
 
-		OAuth2AuthorizationService authorizationService = OAuth2ConfigurerUtils.getAuthorizationService(builder);
-		OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator = OAuth2ConfigurerUtils.getTokenGenerator(builder);
+		JwtEncoder jwtEncoder = OAuth2ConfigurerUtils.getJwtEncoder(builder);
+		OAuth2TokenCustomizer<JwtEncodingContext> jwtCustomizer = OAuth2ConfigurerUtils.getJwtCustomizer(builder);
 
 		OAuth2AuthorizationCodeAuthenticationProvider authorizationCodeAuthenticationProvider =
-				new OAuth2AuthorizationCodeAuthenticationProvider(authorizationService, tokenGenerator);
+				new OAuth2AuthorizationCodeAuthenticationProvider(
+						OAuth2ConfigurerUtils.getAuthorizationService(builder),
+						jwtEncoder);
+		if (jwtCustomizer != null) {
+			authorizationCodeAuthenticationProvider.setJwtCustomizer(jwtCustomizer);
+		}
 		authenticationProviders.add(authorizationCodeAuthenticationProvider);
 
 		OAuth2RefreshTokenAuthenticationProvider refreshTokenAuthenticationProvider =
-				new OAuth2RefreshTokenAuthenticationProvider(authorizationService, tokenGenerator);
+				new OAuth2RefreshTokenAuthenticationProvider(
+						OAuth2ConfigurerUtils.getAuthorizationService(builder),
+						jwtEncoder);
+		if (jwtCustomizer != null) {
+			refreshTokenAuthenticationProvider.setJwtCustomizer(jwtCustomizer);
+		}
 		authenticationProviders.add(refreshTokenAuthenticationProvider);
 
 		OAuth2ClientCredentialsAuthenticationProvider clientCredentialsAuthenticationProvider =
-				new OAuth2ClientCredentialsAuthenticationProvider(authorizationService, tokenGenerator);
+				new OAuth2ClientCredentialsAuthenticationProvider(
+						OAuth2ConfigurerUtils.getAuthorizationService(builder),
+						jwtEncoder);
+		if (jwtCustomizer != null) {
+			clientCredentialsAuthenticationProvider.setJwtCustomizer(jwtCustomizer);
+		}
 		authenticationProviders.add(clientCredentialsAuthenticationProvider);
 
 		return authenticationProviders;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,14 +37,11 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.http.converter.OAuth2ErrorHttpMessageConverter;
-import org.springframework.security.oauth2.server.authorization.authentication.ClientSecretAuthenticationProvider;
-import org.springframework.security.oauth2.server.authorization.authentication.JwtClientAssertionAuthenticationProvider;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientAuthenticationToken;
-import org.springframework.security.oauth2.server.authorization.authentication.PublicClientAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.web.authentication.ClientSecretBasicAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.ClientSecretPostAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.DelegatingAuthenticationConverter;
-import org.springframework.security.oauth2.server.authorization.web.authentication.JwtClientAssertionAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.PublicClientAuthenticationConverter;
 import org.springframework.security.web.authentication.AuthenticationConverter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
@@ -61,13 +58,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * @author Patryk Kostrzewa
  * @since 0.0.1
  * @see AuthenticationManager
- * @see JwtClientAssertionAuthenticationConverter
- * @see JwtClientAssertionAuthenticationProvider
- * @see ClientSecretBasicAuthenticationConverter
- * @see ClientSecretPostAuthenticationConverter
- * @see ClientSecretAuthenticationProvider
- * @see PublicClientAuthenticationConverter
- * @see PublicClientAuthenticationProvider
+ * @see OAuth2ClientAuthenticationProvider
  * @see <a target="_blank" href="https://datatracker.ietf.org/doc/html/rfc6749#section-2.3">Section 2.3 Client Authentication</a>
  * @see <a target="_blank" href="https://datatracker.ietf.org/doc/html/rfc6749#section-3.2.1">Section 3.2.1 Token Endpoint Client Authentication</a>
  */
@@ -95,7 +86,6 @@ public final class OAuth2ClientAuthenticationFilter extends OncePerRequestFilter
 		this.requestMatcher = requestMatcher;
 		this.authenticationConverter = new DelegatingAuthenticationConverter(
 				Arrays.asList(
-						new JwtClientAssertionAuthenticationConverter(),
 						new ClientSecretBasicAuthenticationConverter(),
 						new ClientSecretPostAuthenticationConverter(),
 						new PublicClientAuthenticationConverter()));
@@ -188,9 +178,7 @@ public final class OAuth2ClientAuthenticationFilter extends OncePerRequestFilter
 		} else {
 			httpResponse.setStatusCode(HttpStatus.BAD_REQUEST);
 		}
-		// We don't want to reveal too much information to the caller so just return the error code
-		OAuth2Error errorResponse = new OAuth2Error(error.getErrorCode());
-		this.errorHttpResponseConverter.write(errorResponse, null, httpResponse);
+		this.errorHttpResponseConverter.write(error, null, httpResponse);
 	}
 
 }

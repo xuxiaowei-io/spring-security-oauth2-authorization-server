@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.springframework.security.oauth2.server.authorization.token;
+package org.springframework.security.oauth2.server.authorization;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.springframework.lang.Nullable;
-import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JoseHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.util.Assert;
 
 /**
@@ -33,9 +33,9 @@ import org.springframework.util.Assert;
  * @author Joe Grandja
  * @since 0.1.0
  * @see OAuth2TokenContext
- * @see JwsHeader.Builder
+ * @see JoseHeader.Builder
  * @see JwtClaimsSet.Builder
- * @see JwtEncoder#encode(JwtEncoderParameters)
+ * @see JwtEncoder#encode(JoseHeader, JwtClaimsSet)
  */
 public final class JwtEncodingContext implements OAuth2TokenContext {
 	private final Map<Object, Object> context;
@@ -58,18 +58,16 @@ public final class JwtEncodingContext implements OAuth2TokenContext {
 	}
 
 	/**
-	 * Returns the {@link JwsHeader.Builder headers}
-	 * allowing the ability to add, replace, or remove.
+	 * Returns the {@link JoseHeader.Builder headers}.
 	 *
-	 * @return the {@link JwsHeader.Builder}
+	 * @return the {@link JoseHeader.Builder}
 	 */
-	public JwsHeader.Builder getHeaders() {
-		return get(JwsHeader.Builder.class);
+	public JoseHeader.Builder getHeaders() {
+		return get(JoseHeader.Builder.class);
 	}
 
 	/**
-	 * Returns the {@link JwtClaimsSet.Builder claims}
-	 * allowing the ability to add, replace, or remove.
+	 * Returns the {@link JwtClaimsSet.Builder claims}.
 	 *
 	 * @return the {@link JwtClaimsSet.Builder}
 	 */
@@ -84,7 +82,7 @@ public final class JwtEncodingContext implements OAuth2TokenContext {
 	 * @param claimsBuilder the claims to initialize the builder
 	 * @return the {@link Builder}
 	 */
-	public static Builder with(JwsHeader.Builder headersBuilder, JwtClaimsSet.Builder claimsBuilder) {
+	public static Builder with(JoseHeader.Builder headersBuilder, JwtClaimsSet.Builder claimsBuilder) {
 		return new Builder(headersBuilder, claimsBuilder);
 	}
 
@@ -93,11 +91,35 @@ public final class JwtEncodingContext implements OAuth2TokenContext {
 	 */
 	public static final class Builder extends AbstractBuilder<JwtEncodingContext, Builder> {
 
-		private Builder(JwsHeader.Builder headersBuilder, JwtClaimsSet.Builder claimsBuilder) {
+		private Builder(JoseHeader.Builder headersBuilder, JwtClaimsSet.Builder claimsBuilder) {
 			Assert.notNull(headersBuilder, "headersBuilder cannot be null");
 			Assert.notNull(claimsBuilder, "claimsBuilder cannot be null");
-			put(JwsHeader.Builder.class, headersBuilder);
+			put(JoseHeader.Builder.class, headersBuilder);
 			put(JwtClaimsSet.Builder.class, claimsBuilder);
+		}
+
+		/**
+		 * A {@code Consumer} of the {@link JoseHeader.Builder headers}
+		 * allowing the ability to add, replace, or remove.
+		 *
+		 * @param headersConsumer a {@code Consumer} of the {@link JoseHeader.Builder headers}
+		 * @return the {@link Builder} for further configuration
+		 */
+		public Builder headers(Consumer<JoseHeader.Builder> headersConsumer) {
+			headersConsumer.accept(get(JoseHeader.Builder.class));
+			return this;
+		}
+
+		/**
+		 * A {@code Consumer} of the {@link JwtClaimsSet.Builder claims}
+		 * allowing the ability to add, replace, or remove.
+		 *
+		 * @param claimsConsumer a {@code Consumer} of the {@link JwtClaimsSet.Builder claims}
+		 * @return the {@link Builder} for further configuration
+		 */
+		public Builder claims(Consumer<JwtClaimsSet.Builder> claimsConsumer) {
+			claimsConsumer.accept(get(JwtClaimsSet.Builder.class));
+			return this;
 		}
 
 		/**

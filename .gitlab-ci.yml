@@ -28,5 +28,3 @@ deploy:
   artifacts:
     paths:
       - target/spring-security-oauth2-authorization-server-*
-  only:
-    - main

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -250,10 +250,10 @@ public class RegisteredClient implements Serializable {
 		private String clientSecret;
 		private Instant clientSecretExpiresAt;
 		private String clientName;
-		private final Set<ClientAuthenticationMethod> clientAuthenticationMethods = new HashSet<>();
-		private final Set<AuthorizationGrantType> authorizationGrantTypes = new HashSet<>();
-		private final Set<String> redirectUris = new HashSet<>();
-		private final Set<String> scopes = new HashSet<>();
+		private Set<ClientAuthenticationMethod> clientAuthenticationMethods = new HashSet<>();
+		private Set<AuthorizationGrantType> authorizationGrantTypes = new HashSet<>();
+		private Set<String> redirectUris = new HashSet<>();
+		private Set<String> scopes = new HashSet<>();
 		private ClientSettings clientSettings;
 		private TokenSettings tokenSettings;
 
@@ -262,23 +262,23 @@ public class RegisteredClient implements Serializable {
 		}
 
 		protected Builder(RegisteredClient registeredClient) {
-			this.id = registeredClient.getId();
-			this.clientId = registeredClient.getClientId();
-			this.clientIdIssuedAt = registeredClient.getClientIdIssuedAt();
-			this.clientSecret = registeredClient.getClientSecret();
-			this.clientSecretExpiresAt = registeredClient.getClientSecretExpiresAt();
-			this.clientName = registeredClient.getClientName();
-			if (!CollectionUtils.isEmpty(registeredClient.getClientAuthenticationMethods())) {
-				this.clientAuthenticationMethods.addAll(registeredClient.getClientAuthenticationMethods());
+			this.id = registeredClient.id;
+			this.clientId = registeredClient.clientId;
+			this.clientIdIssuedAt = registeredClient.clientIdIssuedAt;
+			this.clientSecret = registeredClient.clientSecret;
+			this.clientSecretExpiresAt = registeredClient.clientSecretExpiresAt;
+			this.clientName = registeredClient.clientName;
+			if (!CollectionUtils.isEmpty(registeredClient.clientAuthenticationMethods)) {
+				this.clientAuthenticationMethods.addAll(registeredClient.clientAuthenticationMethods);
 			}
-			if (!CollectionUtils.isEmpty(registeredClient.getAuthorizationGrantTypes())) {
-				this.authorizationGrantTypes.addAll(registeredClient.getAuthorizationGrantTypes());
+			if (!CollectionUtils.isEmpty(registeredClient.authorizationGrantTypes)) {
+				this.authorizationGrantTypes.addAll(registeredClient.authorizationGrantTypes);
 			}
-			if (!CollectionUtils.isEmpty(registeredClient.getRedirectUris())) {
-				this.redirectUris.addAll(registeredClient.getRedirectUris());
+			if (!CollectionUtils.isEmpty(registeredClient.redirectUris)) {
+				this.redirectUris.addAll(registeredClient.redirectUris);
 			}
-			if (!CollectionUtils.isEmpty(registeredClient.getScopes())) {
-				this.scopes.addAll(registeredClient.getScopes());
+			if (!CollectionUtils.isEmpty(registeredClient.scopes)) {
+				this.scopes.addAll(registeredClient.scopes);
 			}
 			this.clientSettings = ClientSettings.withSettings(registeredClient.getClientSettings().getSettings()).build();
 			this.tokenSettings = TokenSettings.withSettings(registeredClient.getTokenSettings().getSettings()).build();
@@ -483,29 +483,9 @@ public class RegisteredClient implements Serializable {
 			if (CollectionUtils.isEmpty(this.clientAuthenticationMethods)) {
 				this.clientAuthenticationMethods.add(ClientAuthenticationMethod.CLIENT_SECRET_BASIC);
 			}
-			if (this.clientSettings == null) {
-				ClientSettings.Builder builder = ClientSettings.builder();
-				if (isPublicClientType()) {
-					// @formatter:off
-					builder
-							.requireProofKey(true)
-							.requireAuthorizationConsent(true);
-					// @formatter:on
-				}
-				this.clientSettings = builder.build();
-			}
-			if (this.tokenSettings == null) {
-				this.tokenSettings = TokenSettings.builder().build();
-			}
 			validateScopes();
 			validateRedirectUris();
 			return create();
-		}
-
-		private boolean isPublicClientType() {
-			return this.authorizationGrantTypes.contains(AuthorizationGrantType.AUTHORIZATION_CODE) &&
-					this.clientAuthenticationMethods.size() == 1 &&
-					this.clientAuthenticationMethods.contains(ClientAuthenticationMethod.NONE);
 		}
 
 		private RegisteredClient create() {
@@ -525,8 +505,10 @@ public class RegisteredClient implements Serializable {
 					new HashSet<>(this.redirectUris));
 			registeredClient.scopes = Collections.unmodifiableSet(
 					new HashSet<>(this.scopes));
-			registeredClient.clientSettings = this.clientSettings;
-			registeredClient.tokenSettings = this.tokenSettings;
+			registeredClient.clientSettings = this.clientSettings != null ?
+					this.clientSettings : ClientSettings.builder().build();
+			registeredClient.tokenSettings = this.tokenSettings != null ?
+					this.tokenSettings : TokenSettings.builder().build();
 
 			return registeredClient;
 		}

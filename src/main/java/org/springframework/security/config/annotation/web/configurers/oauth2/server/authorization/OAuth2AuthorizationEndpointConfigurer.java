@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,6 @@ import org.springframework.security.web.authentication.preauth.AbstractPreAuthen
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
-import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
 /**
@@ -84,7 +83,6 @@ public final class OAuth2AuthorizationEndpointConfigurer extends AbstractOAuth2C
 	 * @return the {@link OAuth2AuthorizationEndpointConfigurer} for further configuration
 	 */
 	public OAuth2AuthorizationEndpointConfigurer authenticationProvider(AuthenticationProvider authenticationProvider) {
-		Assert.notNull(authenticationProvider, "authenticationProvider cannot be null");
 		this.authenticationProviders.add(authenticationProvider);
 		return this;
 	}
