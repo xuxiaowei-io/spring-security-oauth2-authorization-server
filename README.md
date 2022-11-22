@@ -4,6 +4,12 @@
 
 ## 各版本支持说明
 
+- spring-authorization-server 分为两个产品线，1.x 与 1.x 之前的版本
+    - 1.x 之前
+        - 支持 JDK 8/11（0.3.0 仅支持 JDK 11）
+    - 1.x
+        - 支持 JDK 17
+
 | org.springframework.security:spring-security-oauth2-authorization-server | 支持 JDK 8                                                                                                                                                                                                                                                                                                                                                                                                                                     | 支持 JDK 11 | 支持 Spring 版本 | 支持 Spring Security | 支持 Spring Boot 版本 |
 |--------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|--------------|--------------------|-------------------|
 | 0.2.0                                                                    | ✅ [MANIFEST.MF](https://s01.oss.sonatype.org/service/local/repositories/releases/archive/org/springframework/security/spring-security-oauth2-authorization-server/0.2.0/spring-security-oauth2-authorization-server-0.2.0.jar/!/META-INF/MANIFEST.MF)                                                                                                                                                                                        | ✅         | 5.7.x        | 5.7.x              | 2.7.x             | 
