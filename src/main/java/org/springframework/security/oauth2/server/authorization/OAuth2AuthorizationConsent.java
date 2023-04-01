@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 the original author or authors.
+ * Copyright 2020-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,8 +25,8 @@ import java.util.function.Consumer;
 import org.springframework.lang.NonNull;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.core.Version;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.util.SpringAuthorizationServerVersion;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 
@@ -43,7 +43,7 @@ import org.springframework.util.CollectionUtils;
  * @since 0.1.2
  */
 public final class OAuth2AuthorizationConsent implements Serializable {
-	private static final long serialVersionUID = Version.SERIAL_VERSION_UID;
+	private static final long serialVersionUID = SpringAuthorizationServerVersion.SERIAL_VERSION_UID;
 	private static final String AUTHORITIES_SCOPE_PREFIX = "SCOPE_";
 
 	private final String registeredClientId;
@@ -152,7 +152,7 @@ public final class OAuth2AuthorizationConsent implements Serializable {
 	 * A builder for {@link OAuth2AuthorizationConsent}.
 	 */
 	public static final class Builder implements Serializable {
-		private static final long serialVersionUID = Version.SERIAL_VERSION_UID;
+		private static final long serialVersionUID = SpringAuthorizationServerVersion.SERIAL_VERSION_UID;
 
 		private final String registeredClientId;
 		private final String principalName;

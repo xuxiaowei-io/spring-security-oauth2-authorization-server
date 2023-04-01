@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.lang.Nullable;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
-import org.springframework.security.oauth2.core.OAuth2AuthorizationCode;
+import org.springframework.security.oauth2.core.OAuth2DeviceCode;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
-import org.springframework.security.oauth2.core.OAuth2TokenType;
+import org.springframework.security.oauth2.core.OAuth2UserCode;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
+import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
 import org.springframework.util.Assert;
 
 /**
@@ -152,6 +154,7 @@ public final class InMemoryOAuth2AuthorizationService implements OAuth2Authoriza
 			return matchesState(authorization, token) ||
 					matchesAuthorizationCode(authorization, token) ||
 					matchesAccessToken(authorization, token) ||
+					matchesIdToken(authorization, token) ||
 					matchesRefreshToken(authorization, token);
 		} else if (OAuth2ParameterNames.STATE.equals(tokenType.getValue())) {
 			return matchesState(authorization, token);
@@ -159,8 +162,14 @@ public final class InMemoryOAuth2AuthorizationService implements OAuth2Authoriza
 			return matchesAuthorizationCode(authorization, token);
 		} else if (OAuth2TokenType.ACCESS_TOKEN.equals(tokenType)) {
 			return matchesAccessToken(authorization, token);
+		} else if (OidcParameterNames.ID_TOKEN.equals(tokenType.getValue())) {
+			return matchesIdToken(authorization, token);
 		} else if (OAuth2TokenType.REFRESH_TOKEN.equals(tokenType)) {
 			return matchesRefreshToken(authorization, token);
+		} else if (OAuth2ParameterNames.DEVICE_CODE.equals(tokenType.getValue())) {
+			return matchesDeviceCode(authorization, token);
+		} else if (OAuth2ParameterNames.USER_CODE.equals(tokenType.getValue())) {
+			return matchesUserCode(authorization, token);
 		}
 		return false;
 	}
@@ -185,6 +194,24 @@ public final class InMemoryOAuth2AuthorizationService implements OAuth2Authoriza
 		OAuth2Authorization.Token<OAuth2RefreshToken> refreshToken =
 				authorization.getToken(OAuth2RefreshToken.class);
 		return refreshToken != null && refreshToken.getToken().getTokenValue().equals(token);
+	}
+
+	private static boolean matchesIdToken(OAuth2Authorization authorization, String token) {
+		OAuth2Authorization.Token<OidcIdToken> idToken =
+				authorization.getToken(OidcIdToken.class);
+		return idToken != null && idToken.getToken().getTokenValue().equals(token);
+	}
+
+	private static boolean matchesDeviceCode(OAuth2Authorization authorization, String token) {
+		OAuth2Authorization.Token<OAuth2DeviceCode> deviceCode =
+				authorization.getToken(OAuth2DeviceCode.class);
+		return deviceCode != null && deviceCode.getToken().getTokenValue().equals(token);
+	}
+
+	private static boolean matchesUserCode(OAuth2Authorization authorization, String token) {
+		OAuth2Authorization.Token<OAuth2UserCode> userCode =
+				authorization.getToken(OAuth2UserCode.class);
+		return userCode != null && userCode.getToken().getTokenValue().equals(token);
 	}
 
 	private static final class MaxSizeHashMap<K, V> extends LinkedHashMap<K, V> {

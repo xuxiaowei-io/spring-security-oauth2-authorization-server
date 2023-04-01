@@ -21,16 +21,19 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Map;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
-import org.springframework.security.oauth2.core.OAuth2TokenType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.core.endpoint.PkceParameterNames;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
@@ -47,6 +50,7 @@ import org.springframework.util.StringUtils;
  */
 final class CodeVerifierAuthenticator {
 	private static final OAuth2TokenType AUTHORIZATION_CODE_TOKEN_TYPE = new OAuth2TokenType(OAuth2ParameterNames.CODE);
+	private final Log logger = LogFactory.getLog(getClass());
 	private final OAuth2AuthorizationService authorizationService;
 
 	CodeVerifierAuthenticator(OAuth2AuthorizationService authorizationService) {
@@ -81,6 +85,10 @@ final class CodeVerifierAuthenticator {
 			throwInvalidGrant(OAuth2ParameterNames.CODE);
 		}
 
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Retrieved authorization with authorization code");
+		}
+
 		OAuth2AuthorizationRequest authorizationRequest = authorization.getAttribute(
 				OAuth2AuthorizationRequest.class.getName());
 
@@ -90,8 +98,15 @@ final class CodeVerifierAuthenticator {
 			if (registeredClient.getClientSettings().isRequireProofKey()) {
 				throwInvalidGrant(PkceParameterNames.CODE_CHALLENGE);
 			} else {
+				if (this.logger.isTraceEnabled()) {
+					this.logger.trace("Did not authenticate code verifier since requireProofKey=false");
+				}
 				return false;
 			}
+		}
+
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Validated code verifier parameters");
 		}
 
 		String codeChallengeMethod = (String) authorizationRequest.getAdditionalParameters()
@@ -99,6 +114,10 @@ final class CodeVerifierAuthenticator {
 		String codeVerifier = (String) parameters.get(PkceParameterNames.CODE_VERIFIER);
 		if (!codeVerifierValid(codeVerifier, codeChallenge, codeChallengeMethod)) {
 			throwInvalidGrant(PkceParameterNames.CODE_VERIFIER);
+		}
+
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Authenticated code verifier");
 		}
 
 		return true;
@@ -122,9 +141,10 @@ final class CodeVerifierAuthenticator {
 			} catch (NoSuchAlgorithmException ex) {
 				// It is unlikely that SHA-256 is not available on the server. If it is not available,
 				// there will likely be bigger issues as well. We default to SERVER_ERROR.
+				throw new OAuth2AuthenticationException(OAuth2ErrorCodes.SERVER_ERROR);
 			}
 		}
-		throw new OAuth2AuthenticationException(OAuth2ErrorCodes.SERVER_ERROR);
+		return false;
 	}
 
 	private static void throwInvalidGrant(String parameterName) {

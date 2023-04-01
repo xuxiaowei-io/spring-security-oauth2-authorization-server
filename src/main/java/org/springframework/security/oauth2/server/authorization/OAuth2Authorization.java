@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 the original author or authors.
+ * Copyright 2020-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,10 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -29,8 +31,8 @@ import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
-import org.springframework.security.oauth2.core.Version;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.util.SpringAuthorizationServerVersion;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -50,19 +52,12 @@ import org.springframework.util.StringUtils;
  * @see OAuth2RefreshToken
  */
 public class OAuth2Authorization implements Serializable {
-	private static final long serialVersionUID = Version.SERIAL_VERSION_UID;
-
-	/**
-	 * The name of the {@link #getAttribute(String) attribute} used for the authorized scope(s).
-	 * The value of the attribute is of type {@code Set<String>}.
-	 */
-	public static final String AUTHORIZED_SCOPE_ATTRIBUTE_NAME =
-			OAuth2Authorization.class.getName().concat(".AUTHORIZED_SCOPE");
-
+	private static final long serialVersionUID = SpringAuthorizationServerVersion.SERIAL_VERSION_UID;
 	private String id;
 	private String registeredClientId;
 	private String principalName;
 	private AuthorizationGrantType authorizationGrantType;
+	private Set<String> authorizedScopes;
 	private Map<Class<? extends OAuth2Token>, Token<?>> tokens;
 	private Map<String, Object> attributes;
 
@@ -103,6 +98,16 @@ public class OAuth2Authorization implements Serializable {
 	 */
 	public AuthorizationGrantType getAuthorizationGrantType() {
 		return this.authorizationGrantType;
+	}
+
+	/**
+	 * Returns the authorized scope(s).
+	 *
+	 * @return the {@code Set} of authorized scope(s)
+	 * @since 0.4.0
+	 */
+	public Set<String> getAuthorizedScopes() {
+		return this.authorizedScopes;
 	}
 
 	/**
@@ -194,6 +199,7 @@ public class OAuth2Authorization implements Serializable {
 				Objects.equals(this.registeredClientId, that.registeredClientId) &&
 				Objects.equals(this.principalName, that.principalName) &&
 				Objects.equals(this.authorizationGrantType, that.authorizationGrantType) &&
+				Objects.equals(this.authorizedScopes, that.authorizedScopes) &&
 				Objects.equals(this.tokens, that.tokens) &&
 				Objects.equals(this.attributes, that.attributes);
 	}
@@ -201,7 +207,7 @@ public class OAuth2Authorization implements Serializable {
 	@Override
 	public int hashCode() {
 		return Objects.hash(this.id, this.registeredClientId, this.principalName,
-				this.authorizationGrantType, this.tokens, this.attributes);
+				this.authorizationGrantType, this.authorizedScopes, this.tokens, this.attributes);
 	}
 
 	/**
@@ -227,6 +233,7 @@ public class OAuth2Authorization implements Serializable {
 				.id(authorization.getId())
 				.principalName(authorization.getPrincipalName())
 				.authorizationGrantType(authorization.getAuthorizationGrantType())
+				.authorizedScopes(authorization.getAuthorizedScopes())
 				.tokens(authorization.tokens)
 				.attributes(attrs -> attrs.putAll(authorization.getAttributes()));
 	}
@@ -238,13 +245,25 @@ public class OAuth2Authorization implements Serializable {
 	 * @since 0.1.0
 	 */
 	public static class Token<T extends OAuth2Token> implements Serializable {
-		private static final long serialVersionUID = Version.SERIAL_VERSION_UID;
+		private static final long serialVersionUID = SpringAuthorizationServerVersion.SERIAL_VERSION_UID;
 		protected static final String TOKEN_METADATA_NAMESPACE = "metadata.token.";
 
 		/**
 		 * The name of the metadata that indicates if the token has been invalidated.
 		 */
 		public static final String INVALIDATED_METADATA_NAME = TOKEN_METADATA_NAMESPACE.concat("invalidated");
+
+		/**
+		 * The name of the metadata that indicates if access has been denied by the resource owner.
+		 * Used with the OAuth 2.0 Device Authorization Grant.
+		 */
+		public static final String ACCESS_DENIED_METADATA_NAME = TOKEN_METADATA_NAMESPACE.concat("access_denied");
+
+		/**
+		 * The name of the metadata that indicates if access has been denied by the resource owner.
+		 * Used with the OAuth 2.0 Device Authorization Grant.
+		 */
+		public static final String ACCESS_GRANTED_METADATA_NAME = TOKEN_METADATA_NAMESPACE.concat("access_granted");
 
 		/**
 		 * The name of the metadata used for the claims of the token.
@@ -375,11 +394,12 @@ public class OAuth2Authorization implements Serializable {
 	 * A builder for {@link OAuth2Authorization}.
 	 */
 	public static class Builder implements Serializable {
-		private static final long serialVersionUID = Version.SERIAL_VERSION_UID;
+		private static final long serialVersionUID = SpringAuthorizationServerVersion.SERIAL_VERSION_UID;
 		private String id;
 		private final String registeredClientId;
 		private String principalName;
 		private AuthorizationGrantType authorizationGrantType;
+		private Set<String> authorizedScopes;
 		private Map<Class<? extends OAuth2Token>, Token<?>> tokens = new HashMap<>();
 		private final Map<String, Object> attributes = new HashMap<>();
 
@@ -417,6 +437,18 @@ public class OAuth2Authorization implements Serializable {
 		 */
 		public Builder authorizationGrantType(AuthorizationGrantType authorizationGrantType) {
 			this.authorizationGrantType = authorizationGrantType;
+			return this;
+		}
+
+		/**
+		 * Sets the authorized scope(s).
+		 *
+		 * @param authorizedScopes the {@code Set} of authorized scope(s)
+		 * @return the {@link Builder}
+		 * @since 0.4.0
+		 */
+		public Builder authorizedScopes(Set<String> authorizedScopes) {
+			this.authorizedScopes = authorizedScopes;
 			return this;
 		}
 
@@ -522,6 +554,12 @@ public class OAuth2Authorization implements Serializable {
 			authorization.registeredClientId = this.registeredClientId;
 			authorization.principalName = this.principalName;
 			authorization.authorizationGrantType = this.authorizationGrantType;
+			authorization.authorizedScopes =
+					Collections.unmodifiableSet(
+							!CollectionUtils.isEmpty(this.authorizedScopes) ?
+									new HashSet<>(this.authorizedScopes) :
+									new HashSet<>()
+					);
 			authorization.tokens = Collections.unmodifiableMap(this.tokens);
 			authorization.attributes = Collections.unmodifiableMap(this.attributes);
 			return authorization;

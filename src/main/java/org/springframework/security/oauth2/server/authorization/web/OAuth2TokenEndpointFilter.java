@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.springframework.core.log.LogMessage;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -52,6 +53,7 @@ import org.springframework.security.oauth2.server.authorization.authentication.O
 import org.springframework.security.oauth2.server.authorization.web.authentication.DelegatingAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2AuthorizationCodeAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2ClientCredentialsAuthenticationConverter;
+import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2DeviceCodeAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2RefreshTokenAuthenticationConverter;
 import org.springframework.security.web.authentication.AuthenticationConverter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
@@ -135,7 +137,8 @@ public final class OAuth2TokenEndpointFilter extends OncePerRequestFilter {
 				Arrays.asList(
 						new OAuth2AuthorizationCodeAuthenticationConverter(),
 						new OAuth2RefreshTokenAuthenticationConverter(),
-						new OAuth2ClientCredentialsAuthenticationConverter()));
+						new OAuth2ClientCredentialsAuthenticationConverter(),
+						new OAuth2DeviceCodeAuthenticationConverter()));
 	}
 
 	@Override
@@ -167,6 +170,9 @@ public final class OAuth2TokenEndpointFilter extends OncePerRequestFilter {
 			this.authenticationSuccessHandler.onAuthenticationSuccess(request, response, accessTokenAuthentication);
 		} catch (OAuth2AuthenticationException ex) {
 			SecurityContextHolder.clearContext();
+			if (this.logger.isTraceEnabled()) {
+				this.logger.trace(LogMessage.format("Token request failed: %s", ex.getError()), ex);
+			}
 			this.authenticationFailureHandler.onAuthenticationFailure(request, response, ex);
 		}
 	}

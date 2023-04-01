@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,13 @@ import org.springframework.http.server.ServletServerHttpResponse;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationResponseType;
-import org.springframework.security.oauth2.core.oidc.OidcProviderConfiguration;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
-import org.springframework.security.oauth2.core.oidc.http.converter.OidcProviderConfigurationHttpMessageConverter;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
-import org.springframework.security.oauth2.server.authorization.config.ProviderSettings;
-import org.springframework.security.oauth2.server.authorization.context.ProviderContextHolder;
+import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContext;
+import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
+import org.springframework.security.oauth2.server.authorization.oidc.OidcProviderConfiguration;
+import org.springframework.security.oauth2.server.authorization.oidc.http.converter.OidcProviderConfigurationHttpMessageConverter;
+import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
@@ -46,9 +47,10 @@ import org.springframework.web.util.UriComponentsBuilder;
  * A {@code Filter} that processes OpenID Provider Configuration Requests.
  *
  * @author Daniel Garnier-Moiroux
+ * @author Joe Grandja
  * @since 0.1.0
  * @see OidcProviderConfiguration
- * @see ProviderSettings
+ * @see AuthorizationServerSettings
  * @see <a target="_blank" href="https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationRequest">4.1. OpenID Provider Configuration Request</a>
  */
 public final class OidcProviderConfigurationEndpointFilter extends OncePerRequestFilter {
@@ -57,18 +59,23 @@ public final class OidcProviderConfigurationEndpointFilter extends OncePerReques
 	 */
 	private static final String DEFAULT_OIDC_PROVIDER_CONFIGURATION_ENDPOINT_URI = "/.well-known/openid-configuration";
 
-	private final ProviderSettings providerSettings;
-	private final RequestMatcher requestMatcher;
+	private final RequestMatcher requestMatcher = new AntPathRequestMatcher(
+			DEFAULT_OIDC_PROVIDER_CONFIGURATION_ENDPOINT_URI,
+			HttpMethod.GET.name());
 	private final OidcProviderConfigurationHttpMessageConverter providerConfigurationHttpMessageConverter =
 			new OidcProviderConfigurationHttpMessageConverter();
+	private Consumer<OidcProviderConfiguration.Builder> providerConfigurationCustomizer = (providerConfiguration) -> {};
 
-	public OidcProviderConfigurationEndpointFilter(ProviderSettings providerSettings) {
-		Assert.notNull(providerSettings, "providerSettings cannot be null");
-		this.providerSettings = providerSettings;
-		this.requestMatcher = new AntPathRequestMatcher(
-				DEFAULT_OIDC_PROVIDER_CONFIGURATION_ENDPOINT_URI,
-				HttpMethod.GET.name()
-		);
+	/**
+	 * Sets the {@code Consumer} providing access to the {@link OidcProviderConfiguration.Builder}
+	 * allowing the ability to customize the claims of the OpenID Provider's configuration.
+	 *
+	 * @param providerConfigurationCustomizer the {@code Consumer} providing access to the {@link OidcProviderConfiguration.Builder}
+	 * @since 0.4.0
+	 */
+	public void setProviderConfigurationCustomizer(Consumer<OidcProviderConfiguration.Builder> providerConfigurationCustomizer) {
+		Assert.notNull(providerConfigurationCustomizer, "providerConfigurationCustomizer cannot be null");
+		this.providerConfigurationCustomizer = providerConfigurationCustomizer;
 	}
 
 	@Override
@@ -80,27 +87,35 @@ public final class OidcProviderConfigurationEndpointFilter extends OncePerReques
 			return;
 		}
 
-		String issuer = ProviderContextHolder.getProviderContext().getIssuer();
+		AuthorizationServerContext authorizationServerContext = AuthorizationServerContextHolder.getContext();
+		String issuer = authorizationServerContext.getIssuer();
+		AuthorizationServerSettings authorizationServerSettings = authorizationServerContext.getAuthorizationServerSettings();
 
-		OidcProviderConfiguration providerConfiguration = OidcProviderConfiguration.builder()
+		OidcProviderConfiguration.Builder providerConfiguration = OidcProviderConfiguration.builder()
 				.issuer(issuer)
-				.authorizationEndpoint(asUrl(issuer, this.providerSettings.getAuthorizationEndpoint()))
-				.tokenEndpoint(asUrl(issuer, this.providerSettings.getTokenEndpoint()))
+				.authorizationEndpoint(asUrl(issuer, authorizationServerSettings.getAuthorizationEndpoint()))
+				.tokenEndpoint(asUrl(issuer, authorizationServerSettings.getTokenEndpoint()))
 				.tokenEndpointAuthenticationMethods(clientAuthenticationMethods())
-				.jwkSetUrl(asUrl(issuer, this.providerSettings.getJwkSetEndpoint()))
-				.userInfoEndpoint(asUrl(issuer, this.providerSettings.getOidcUserInfoEndpoint()))
+				.jwkSetUrl(asUrl(issuer, authorizationServerSettings.getJwkSetEndpoint()))
+				.userInfoEndpoint(asUrl(issuer, authorizationServerSettings.getOidcUserInfoEndpoint()))
+				.endSessionEndpoint(asUrl(issuer, authorizationServerSettings.getOidcLogoutEndpoint()))
 				.responseType(OAuth2AuthorizationResponseType.CODE.getValue())
 				.grantType(AuthorizationGrantType.AUTHORIZATION_CODE.getValue())
 				.grantType(AuthorizationGrantType.CLIENT_CREDENTIALS.getValue())
 				.grantType(AuthorizationGrantType.REFRESH_TOKEN.getValue())
+				.tokenRevocationEndpoint(asUrl(issuer, authorizationServerSettings.getTokenRevocationEndpoint()))
+				.tokenRevocationEndpointAuthenticationMethods(clientAuthenticationMethods())
+				.tokenIntrospectionEndpoint(asUrl(issuer, authorizationServerSettings.getTokenIntrospectionEndpoint()))
+				.tokenIntrospectionEndpointAuthenticationMethods(clientAuthenticationMethods())
 				.subjectType("public")
 				.idTokenSigningAlgorithm(SignatureAlgorithm.RS256.getName())
-				.scope(OidcScopes.OPENID)
-				.build();
+				.scope(OidcScopes.OPENID);
+
+		this.providerConfigurationCustomizer.accept(providerConfiguration);
 
 		ServletServerHttpResponse httpResponse = new ServletServerHttpResponse(response);
 		this.providerConfigurationHttpMessageConverter.write(
-				providerConfiguration, MediaType.APPLICATION_JSON, httpResponse);
+				providerConfiguration.build(), MediaType.APPLICATION_JSON, httpResponse);
 	}
 
 	private static Consumer<List<String>> clientAuthenticationMethods() {
@@ -115,4 +130,5 @@ public final class OidcProviderConfigurationEndpointFilter extends OncePerReques
 	private static String asUrl(String issuer, String endpoint) {
 		return UriComponentsBuilder.fromUriString(issuer).path(endpoint).build().toUriString();
 	}
+
 }

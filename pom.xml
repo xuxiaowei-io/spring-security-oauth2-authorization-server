@@ -7,7 +7,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>io.xuxiaowei.security</groupId>
     <artifactId>spring-security-oauth2-authorization-server</artifactId>
-    <version>0.3.0</version>
+    <version>1.1.0-M2-jdk8-0.0.1-SNAPSHOT</version>
     <name>spring-security-oauth2-authorization-server</name>
     <description>Spring Authorization Server</description>
     <url>https://spring.io/projects/spring-authorization-server</url>

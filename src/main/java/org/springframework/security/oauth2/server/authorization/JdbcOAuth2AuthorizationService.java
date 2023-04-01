@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,12 +49,11 @@ import org.springframework.lang.Nullable;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
-import org.springframework.security.oauth2.core.OAuth2AuthorizationCode;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
-import org.springframework.security.oauth2.core.OAuth2TokenType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
+import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
@@ -87,6 +86,7 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			+ "registered_client_id, "
 			+ "principal_name, "
 			+ "authorization_grant_type, "
+			+ "authorized_scopes, "
 			+ "attributes, "
 			+ "state, "
 			+ "authorization_code_value, "
@@ -113,11 +113,12 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 
 	private static final String PK_FILTER = "id = ?";
 	private static final String UNKNOWN_TOKEN_TYPE_FILTER = "state = ? OR authorization_code_value = ? OR " +
-			"access_token_value = ? OR refresh_token_value = ?";
+			"access_token_value = ? OR oidc_id_token_value = ? OR refresh_token_value = ?";
 
 	private static final String STATE_FILTER = "state = ?";
 	private static final String AUTHORIZATION_CODE_FILTER = "authorization_code_value = ?";
 	private static final String ACCESS_TOKEN_FILTER = "access_token_value = ?";
+	private static final String ID_TOKEN_FILTER = "oidc_id_token_value = ?";
 	private static final String REFRESH_TOKEN_FILTER = "refresh_token_value = ?";
 
 	// @formatter:off
@@ -128,12 +129,12 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 
 	// @formatter:off
 	private static final String SAVE_AUTHORIZATION_SQL = "INSERT INTO " + TABLE_NAME
-			+ " (" + COLUMN_NAMES + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+			+ " (" + COLUMN_NAMES + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 	// @formatter:on
 
 	// @formatter:off
 	private static final String UPDATE_AUTHORIZATION_SQL = "UPDATE " + TABLE_NAME
-			+ " SET registered_client_id = ?, principal_name = ?, authorization_grant_type = ?, attributes = ?, state = ?,"
+			+ " SET registered_client_id = ?, principal_name = ?, authorization_grant_type = ?, authorized_scopes = ?, attributes = ?, state = ?,"
 			+ " authorization_code_value = ?, authorization_code_issued_at = ?, authorization_code_expires_at = ?, authorization_code_metadata = ?,"
 			+ " access_token_value = ?, access_token_issued_at = ?, access_token_expires_at = ?, access_token_metadata = ?, access_token_type = ?, access_token_scopes = ?,"
 			+ " oidc_id_token_value = ?, oidc_id_token_issued_at = ?, oidc_id_token_expires_at = ?, oidc_id_token_metadata = ?,"
@@ -241,6 +242,7 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			parameters.add(new SqlParameterValue(Types.VARCHAR, token));
 			parameters.add(mapToSqlParameter("authorization_code_value", token));
 			parameters.add(mapToSqlParameter("access_token_value", token));
+			parameters.add(mapToSqlParameter("oidc_id_token_value", token));
 			parameters.add(mapToSqlParameter("refresh_token_value", token));
 			return findBy(UNKNOWN_TOKEN_TYPE_FILTER, parameters);
 		} else if (OAuth2ParameterNames.STATE.equals(tokenType.getValue())) {
@@ -252,6 +254,9 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 		} else if (OAuth2TokenType.ACCESS_TOKEN.equals(tokenType)) {
 			parameters.add(mapToSqlParameter("access_token_value", token));
 			return findBy(ACCESS_TOKEN_FILTER, parameters);
+		} else if (OidcParameterNames.ID_TOKEN.equals(tokenType.getValue())) {
+			parameters.add(mapToSqlParameter("oidc_id_token_value", token));
+			return findBy(ID_TOKEN_FILTER, parameters);
 		} else if (OAuth2TokenType.REFRESH_TOKEN.equals(tokenType)) {
 			parameters.add(mapToSqlParameter("refresh_token_value", token));
 			return findBy(REFRESH_TOKEN_FILTER, parameters);
@@ -344,11 +349,17 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			String id = rs.getString("id");
 			String principalName = rs.getString("principal_name");
 			String authorizationGrantType = rs.getString("authorization_grant_type");
+			Set<String> authorizedScopes = Collections.emptySet();
+			String authorizedScopesString = rs.getString("authorized_scopes");
+			if (authorizedScopesString != null) {
+				authorizedScopes = StringUtils.commaDelimitedListToSet(authorizedScopesString);
+			}
 			Map<String, Object> attributes = parseMap(getLobValue(rs, "attributes"));
 
 			builder.id(id)
 					.principalName(principalName)
 					.authorizationGrantType(new AuthorizationGrantType(authorizationGrantType))
+					.authorizedScopes(authorizedScopes)
 					.attributes((attrs) -> attrs.putAll(attributes));
 
 			String state = rs.getString("state");
@@ -486,6 +497,12 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			parameters.add(new SqlParameterValue(Types.VARCHAR, authorization.getRegisteredClientId()));
 			parameters.add(new SqlParameterValue(Types.VARCHAR, authorization.getPrincipalName()));
 			parameters.add(new SqlParameterValue(Types.VARCHAR, authorization.getAuthorizationGrantType().getValue()));
+
+			String authorizedScopes = null;
+			if (!CollectionUtils.isEmpty(authorization.getAuthorizedScopes())) {
+				authorizedScopes = StringUtils.collectionToDelimitedString(authorization.getAuthorizedScopes(), ",");
+			}
+			parameters.add(new SqlParameterValue(Types.VARCHAR, authorizedScopes));
 
 			String attributes = writeMap(authorization.getAttributes());
 			parameters.add(mapToSqlParameter("attributes", attributes));

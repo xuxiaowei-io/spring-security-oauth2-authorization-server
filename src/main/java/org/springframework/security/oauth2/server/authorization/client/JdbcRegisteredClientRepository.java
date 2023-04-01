@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,11 +39,11 @@ import org.springframework.jdbc.core.SqlParameterValue;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.OAuth2TokenFormat;
-import org.springframework.security.oauth2.server.authorization.config.ClientSettings;
-import org.springframework.security.oauth2.server.authorization.config.ConfigurationSettingNames;
-import org.springframework.security.oauth2.server.authorization.config.TokenSettings;
 import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
+import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
+import org.springframework.security.oauth2.server.authorization.settings.ConfigurationSettingNames;
+import org.springframework.security.oauth2.server.authorization.settings.OAuth2TokenFormat;
+import org.springframework.security.oauth2.server.authorization.settings.TokenSettings;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
@@ -77,6 +77,7 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 			+ "client_authentication_methods, "
 			+ "authorization_grant_types, "
 			+ "redirect_uris, "
+			+ "post_logout_redirect_uris, "
 			+ "scopes, "
 			+ "client_settings,"
 			+ "token_settings";
@@ -90,15 +91,18 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 
 	// @formatter:off
 	private static final String INSERT_REGISTERED_CLIENT_SQL = "INSERT INTO " + TABLE_NAME
-			+ "(" + COLUMN_NAMES + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+			+ "(" + COLUMN_NAMES + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 	// @formatter:on
 
 	// @formatter:off
 	private static final String UPDATE_REGISTERED_CLIENT_SQL = "UPDATE " + TABLE_NAME
-			+ " SET client_name = ?, client_authentication_methods = ?, authorization_grant_types = ?,"
-			+ " redirect_uris = ?, scopes = ?, client_settings = ?, token_settings = ?"
+			+ " SET client_secret = ?, client_secret_expires_at = ?, client_name = ?, client_authentication_methods = ?,"
+			+ " authorization_grant_types = ?, redirect_uris = ?, post_logout_redirect_uris = ?, scopes = ?,"
+			+ " client_settings = ?, token_settings = ?"
 			+ " WHERE " + PK_FILTER;
 	// @formatter:on
+
+	private static final String COUNT_REGISTERED_CLIENT_SQL = "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE ";
 
 	private final JdbcOperations jdbcOperations;
 	private RowMapper<RegisteredClient> registeredClientRowMapper;
@@ -133,17 +137,35 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 		SqlParameterValue id = parameters.remove(0);
 		parameters.remove(0); // remove client_id
 		parameters.remove(0); // remove client_id_issued_at
-		parameters.remove(0); // remove client_secret
-		parameters.remove(0); // remove client_secret_expires_at
 		parameters.add(id);
 		PreparedStatementSetter pss = new ArgumentPreparedStatementSetter(parameters.toArray());
 		this.jdbcOperations.update(UPDATE_REGISTERED_CLIENT_SQL, pss);
 	}
 
 	private void insertRegisteredClient(RegisteredClient registeredClient) {
+		assertUniqueIdentifiers(registeredClient);
 		List<SqlParameterValue> parameters = this.registeredClientParametersMapper.apply(registeredClient);
 		PreparedStatementSetter pss = new ArgumentPreparedStatementSetter(parameters.toArray());
 		this.jdbcOperations.update(INSERT_REGISTERED_CLIENT_SQL, pss);
+	}
+
+	private void assertUniqueIdentifiers(RegisteredClient registeredClient) {
+		Integer count = this.jdbcOperations.queryForObject(
+				COUNT_REGISTERED_CLIENT_SQL + "client_id = ?",
+				Integer.class,
+				registeredClient.getClientId());
+		if (count != null && count > 0) {
+			throw new IllegalArgumentException("Registered client must be unique. " +
+					"Found duplicate client identifier: " + registeredClient.getClientId());
+		}
+		count = this.jdbcOperations.queryForObject(
+				COUNT_REGISTERED_CLIENT_SQL + "client_secret = ?",
+				Integer.class,
+				registeredClient.getClientSecret());
+		if (count != null && count > 0) {
+			throw new IllegalArgumentException("Registered client must be unique. " +
+					"Found duplicate client secret for identifier: " + registeredClient.getId());
+		}
 	}
 
 	@Override
@@ -219,6 +241,7 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 			Set<String> clientAuthenticationMethods = StringUtils.commaDelimitedListToSet(rs.getString("client_authentication_methods"));
 			Set<String> authorizationGrantTypes = StringUtils.commaDelimitedListToSet(rs.getString("authorization_grant_types"));
 			Set<String> redirectUris = StringUtils.commaDelimitedListToSet(rs.getString("redirect_uris"));
+			Set<String> postLogoutRedirectUris = StringUtils.commaDelimitedListToSet(rs.getString("post_logout_redirect_uris"));
 			Set<String> clientScopes = StringUtils.commaDelimitedListToSet(rs.getString("scopes"));
 
 			// @formatter:off
@@ -235,6 +258,7 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 							authorizationGrantTypes.forEach(grantType ->
 									grantTypes.add(resolveAuthorizationGrantType(grantType))))
 					.redirectUris((uris) -> uris.addAll(redirectUris))
+					.postLogoutRedirectUris((uris) -> uris.addAll(postLogoutRedirectUris))
 					.scopes((scopes) -> scopes.addAll(clientScopes));
 			// @formatter:on
 
@@ -332,6 +356,7 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
 					new SqlParameterValue(Types.VARCHAR, StringUtils.collectionToCommaDelimitedString(clientAuthenticationMethods)),
 					new SqlParameterValue(Types.VARCHAR, StringUtils.collectionToCommaDelimitedString(authorizationGrantTypes)),
 					new SqlParameterValue(Types.VARCHAR, StringUtils.collectionToCommaDelimitedString(registeredClient.getRedirectUris())),
+					new SqlParameterValue(Types.VARCHAR, StringUtils.collectionToCommaDelimitedString(registeredClient.getPostLogoutRedirectUris())),
 					new SqlParameterValue(Types.VARCHAR, StringUtils.collectionToCommaDelimitedString(registeredClient.getScopes())),
 					new SqlParameterValue(Types.VARCHAR, writeMap(registeredClient.getClientSettings().getSettings())),
 					new SqlParameterValue(Types.VARCHAR, writeMap(registeredClient.getTokenSettings().getSettings())));

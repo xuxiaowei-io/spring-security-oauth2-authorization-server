@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2020 the original author or authors.
+ * Copyright 2020-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.springframework.security.oauth2.server.authorization.jackson2;
 
 import java.io.IOException;
@@ -24,27 +23,20 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.util.StdConverter;
 
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest.Builder;
 
 /**
- * TODO
- * This class is a straight copy from Spring Security.
- * It should be consolidated when merging this codebase into Spring Security.
- *
  * A {@code JsonDeserializer} for {@link OAuth2AuthorizationRequest}.
  *
  * @author Joe Grandja
- * @since 5.3
+ * @since 0.1.2
  * @see OAuth2AuthorizationRequest
  * @see OAuth2AuthorizationRequestMixin
  */
 final class OAuth2AuthorizationRequestDeserializer extends JsonDeserializer<OAuth2AuthorizationRequest> {
-
-	private static final StdConverter<JsonNode, AuthorizationGrantType> AUTHORIZATION_GRANT_TYPE_CONVERTER = new StdConverters.AuthorizationGrantTypeConverter();
 
 	@Override
 	public OAuth2AuthorizationRequest deserialize(JsonParser parser, DeserializationContext context)
@@ -56,8 +48,8 @@ final class OAuth2AuthorizationRequestDeserializer extends JsonDeserializer<OAut
 
 	private OAuth2AuthorizationRequest deserialize(JsonParser parser, ObjectMapper mapper, JsonNode root)
 			throws JsonParseException {
-		AuthorizationGrantType authorizationGrantType = AUTHORIZATION_GRANT_TYPE_CONVERTER
-				.convert(JsonNodeUtils.findObjectNode(root, "authorizationGrantType"));
+		AuthorizationGrantType authorizationGrantType = convertAuthorizationGrantType(
+				JsonNodeUtils.findObjectNode(root, "authorizationGrantType"));
 		Builder builder = getBuilder(parser, authorizationGrantType);
 		builder.authorizationUri(JsonNodeUtils.findStringValue(root, "authorizationUri"));
 		builder.clientId(JsonNodeUtils.findStringValue(root, "clientId"));
@@ -76,10 +68,15 @@ final class OAuth2AuthorizationRequestDeserializer extends JsonDeserializer<OAut
 		if (AuthorizationGrantType.AUTHORIZATION_CODE.equals(authorizationGrantType)) {
 			return OAuth2AuthorizationRequest.authorizationCode();
 		}
-		if (AuthorizationGrantType.IMPLICIT.equals(authorizationGrantType)) {
-			return OAuth2AuthorizationRequest.implicit();
-		}
 		throw new JsonParseException(parser, "Invalid authorizationGrantType");
+	}
+
+	private static AuthorizationGrantType convertAuthorizationGrantType(JsonNode jsonNode) {
+		String value = JsonNodeUtils.findStringValue(jsonNode, "value");
+		if (AuthorizationGrantType.AUTHORIZATION_CODE.getValue().equalsIgnoreCase(value)) {
+			return AuthorizationGrantType.AUTHORIZATION_CODE;
+		}
+		return null;
 	}
 
 }

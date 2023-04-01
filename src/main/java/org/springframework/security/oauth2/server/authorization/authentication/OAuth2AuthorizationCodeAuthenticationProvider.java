@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022 the original author or authors.
+ * Copyright 2020-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,24 +16,31 @@
 package org.springframework.security.oauth2.server.authorization.authentication;
 
 import java.security.Principal;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import org.springframework.core.log.LogMessage;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.session.SessionInformation;
+import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClaimAccessor;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
-import org.springframework.security.oauth2.core.OAuth2AuthorizationCode;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
-import org.springframework.security.oauth2.core.OAuth2TokenType;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
@@ -41,13 +48,16 @@ import org.springframework.security.oauth2.core.oidc.OidcScopes;
 import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationCode;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
-import org.springframework.security.oauth2.server.authorization.context.ProviderContextHolder;
+import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContextHolder;
 import org.springframework.security.oauth2.server.authorization.token.DefaultOAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 import org.springframework.util.Assert;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import static org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthenticationProviderUtils.getAuthenticatedClientElseThrowInvalidClient;
@@ -72,8 +82,10 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 			new OAuth2TokenType(OAuth2ParameterNames.CODE);
 	private static final OAuth2TokenType ID_TOKEN_TOKEN_TYPE =
 			new OAuth2TokenType(OidcParameterNames.ID_TOKEN);
+	private final Log logger = LogFactory.getLog(getClass());
 	private final OAuth2AuthorizationService authorizationService;
 	private final OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator;
+	private SessionRegistry sessionRegistry;
 
 	/**
 	 * Constructs an {@code OAuth2AuthorizationCodeAuthenticationProvider} using the provided parameters.
@@ -99,11 +111,20 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 				getAuthenticatedClientElseThrowInvalidClient(authorizationCodeAuthentication);
 		RegisteredClient registeredClient = clientPrincipal.getRegisteredClient();
 
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Retrieved registered client");
+		}
+
 		OAuth2Authorization authorization = this.authorizationService.findByToken(
 				authorizationCodeAuthentication.getCode(), AUTHORIZATION_CODE_TOKEN_TYPE);
 		if (authorization == null) {
 			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
 		}
+
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Retrieved authorization with authorization code");
+		}
+
 		OAuth2Authorization.Token<OAuth2AuthorizationCode> authorizationCode =
 				authorization.getToken(OAuth2AuthorizationCode.class);
 
@@ -115,6 +136,9 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 				// Invalidate the authorization code given that a different client is attempting to use it
 				authorization = OAuth2AuthenticationProviderUtils.invalidate(authorization, authorizationCode.getToken());
 				this.authorizationService.save(authorization);
+				if (this.logger.isWarnEnabled()) {
+					this.logger.warn(LogMessage.format("Invalidated authorization code used by registered client '%s'", registeredClient.getId()));
+				}
 			}
 			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
 		}
@@ -128,13 +152,19 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_GRANT);
 		}
 
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Validated token request parameters");
+		}
+
+		Authentication principal = authorization.getAttribute(Principal.class.getName());
+
 		// @formatter:off
 		DefaultOAuth2TokenContext.Builder tokenContextBuilder = DefaultOAuth2TokenContext.builder()
 				.registeredClient(registeredClient)
-				.principal(authorization.getAttribute(Principal.class.getName()))
-				.providerContext(ProviderContextHolder.getProviderContext())
+				.principal(principal)
+				.authorizationServerContext(AuthorizationServerContextHolder.getContext())
 				.authorization(authorization)
-				.authorizedScopes(authorization.getAttribute(OAuth2Authorization.AUTHORIZED_SCOPE_ATTRIBUTE_NAME))
+				.authorizedScopes(authorization.getAuthorizedScopes())
 				.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
 				.authorizationGrant(authorizationCodeAuthentication);
 		// @formatter:on
@@ -149,6 +179,11 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 					"The token generator failed to generate the access token.", ERROR_URI);
 			throw new OAuth2AuthenticationException(error);
 		}
+
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Generated access token");
+		}
+
 		OAuth2AccessToken accessToken = new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER,
 				generatedAccessToken.getTokenValue(), generatedAccessToken.getIssuedAt(),
 				generatedAccessToken.getExpiresAt(), tokenContext.getAuthorizedScopes());
@@ -172,6 +207,11 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 						"The token generator failed to generate the refresh token.", ERROR_URI);
 				throw new OAuth2AuthenticationException(error);
 			}
+
+			if (this.logger.isTraceEnabled()) {
+				this.logger.trace("Generated refresh token");
+			}
+
 			refreshToken = (OAuth2RefreshToken) generatedRefreshToken;
 			authorizationBuilder.refreshToken(refreshToken);
 		}
@@ -179,13 +219,27 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 		// ----- ID token -----
 		OidcIdToken idToken;
 		if (authorizationRequest.getScopes().contains(OidcScopes.OPENID)) {
-			tokenContext = tokenContextBuilder.tokenType(ID_TOKEN_TOKEN_TYPE).build();
+			SessionInformation sessionInformation = getSessionInformation(principal);
+			if (sessionInformation != null) {
+				tokenContextBuilder.put(SessionInformation.class, sessionInformation);
+			}
+			// @formatter:off
+			tokenContext = tokenContextBuilder
+					.tokenType(ID_TOKEN_TOKEN_TYPE)
+					.authorization(authorizationBuilder.build())	// ID token customizer may need access to the access token and/or refresh token
+					.build();
+			// @formatter:on
 			OAuth2Token generatedIdToken = this.tokenGenerator.generate(tokenContext);
 			if (!(generatedIdToken instanceof Jwt)) {
 				OAuth2Error error = new OAuth2Error(OAuth2ErrorCodes.SERVER_ERROR,
 						"The token generator failed to generate the ID token.", ERROR_URI);
 				throw new OAuth2AuthenticationException(error);
 			}
+
+			if (this.logger.isTraceEnabled()) {
+				this.logger.trace("Generated id token");
+			}
+
 			idToken = new OidcIdToken(generatedIdToken.getTokenValue(), generatedIdToken.getIssuedAt(),
 					generatedIdToken.getExpiresAt(), ((Jwt) generatedIdToken).getClaims());
 			authorizationBuilder.token(idToken, (metadata) ->
@@ -201,10 +255,18 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 
 		this.authorizationService.save(authorization);
 
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Saved authorization");
+		}
+
 		Map<String, Object> additionalParameters = Collections.emptyMap();
 		if (idToken != null) {
 			additionalParameters = new HashMap<>();
 			additionalParameters.put(OidcParameterNames.ID_TOKEN, idToken.getTokenValue());
+		}
+
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Authenticated token request");
 		}
 
 		return new OAuth2AccessTokenAuthenticationToken(
@@ -214,6 +276,34 @@ public final class OAuth2AuthorizationCodeAuthenticationProvider implements Auth
 	@Override
 	public boolean supports(Class<?> authentication) {
 		return OAuth2AuthorizationCodeAuthenticationToken.class.isAssignableFrom(authentication);
+	}
+
+	/**
+	 * Sets the {@link SessionRegistry} used to track OpenID Connect sessions.
+	 *
+	 * @param sessionRegistry the {@link SessionRegistry} used to track OpenID Connect sessions
+	 * @since 1.1.0
+	 */
+	public void setSessionRegistry(SessionRegistry sessionRegistry) {
+		Assert.notNull(sessionRegistry, "sessionRegistry cannot be null");
+		this.sessionRegistry = sessionRegistry;
+	}
+
+	private SessionInformation getSessionInformation(Authentication principal) {
+		SessionInformation sessionInformation = null;
+		if (this.sessionRegistry != null) {
+			List<SessionInformation> sessions = this.sessionRegistry.getAllSessions(principal.getPrincipal(), false);
+			if (!CollectionUtils.isEmpty(sessions)) {
+				sessionInformation = sessions.get(0);
+				if (sessions.size() > 1) {
+					// Get the most recent session
+					sessions = new ArrayList<>(sessions);
+					sessions.sort(Comparator.comparing(SessionInformation::getLastRequest));
+					sessionInformation = sessions.get(sessions.size() - 1);
+				}
+			}
+		}
+		return sessionInformation;
 	}
 
 }

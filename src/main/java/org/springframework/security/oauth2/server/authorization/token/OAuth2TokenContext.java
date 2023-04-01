@@ -24,11 +24,11 @@ import java.util.function.Consumer;
 import org.springframework.lang.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.OAuth2TokenType;
-import org.springframework.security.oauth2.core.context.Context;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
-import org.springframework.security.oauth2.server.authorization.context.ProviderContext;
+import org.springframework.security.oauth2.server.authorization.context.AuthorizationServerContext;
+import org.springframework.security.oauth2.server.authorization.context.Context;
 import org.springframework.util.Assert;
 
 /**
@@ -63,13 +63,13 @@ public interface OAuth2TokenContext extends Context {
 	}
 
 	/**
-	 * Returns the {@link ProviderContext provider context}.
+	 * Returns the {@link AuthorizationServerContext authorization server context}.
 	 *
-	 * @return the {@link ProviderContext}
+	 * @return the {@link AuthorizationServerContext}
 	 * @since 0.2.3
 	 */
-	default ProviderContext getProviderContext() {
-		return get(ProviderContext.class);
+	default AuthorizationServerContext getAuthorizationServerContext() {
+		return get(AuthorizationServerContext.class);
 	}
 
 	/**
@@ -88,8 +88,8 @@ public interface OAuth2TokenContext extends Context {
 	 * @return the authorized scope(s)
 	 */
 	default Set<String> getAuthorizedScopes() {
-		return hasKey(OAuth2Authorization.AUTHORIZED_SCOPE_ATTRIBUTE_NAME) ?
-				get(OAuth2Authorization.AUTHORIZED_SCOPE_ATTRIBUTE_NAME) :
+		return hasKey(AbstractBuilder.AUTHORIZED_SCOPE_KEY) ?
+				get(AbstractBuilder.AUTHORIZED_SCOPE_KEY) :
 				Collections.emptySet();
 	}
 
@@ -130,6 +130,8 @@ public interface OAuth2TokenContext extends Context {
 	abstract class AbstractBuilder<T extends OAuth2TokenContext, B extends AbstractBuilder<T, B>> {
 		private static final String PRINCIPAL_AUTHENTICATION_KEY =
 				Authentication.class.getName().concat(".PRINCIPAL");
+		private static final String AUTHORIZED_SCOPE_KEY =
+				OAuth2Authorization.class.getName().concat(".AUTHORIZED_SCOPE");
 		private static final String AUTHORIZATION_GRANT_AUTHENTICATION_KEY =
 				Authentication.class.getName().concat(".AUTHORIZATION_GRANT");
 		private final Map<Object, Object> context = new HashMap<>();
@@ -155,14 +157,14 @@ public interface OAuth2TokenContext extends Context {
 		}
 
 		/**
-		 * Sets the {@link ProviderContext provider context}.
+		 * Sets the {@link AuthorizationServerContext authorization server context}.
 		 *
-		 * @param providerContext the {@link ProviderContext}
+		 * @param authorizationServerContext the {@link AuthorizationServerContext}
 		 * @return the {@link AbstractBuilder} for further configuration
 		 * @since 0.2.3
 		 */
-		public B providerContext(ProviderContext providerContext) {
-			return put(ProviderContext.class, providerContext);
+		public B authorizationServerContext(AuthorizationServerContext authorizationServerContext) {
+			return put(AuthorizationServerContext.class, authorizationServerContext);
 		}
 
 		/**
@@ -182,7 +184,7 @@ public interface OAuth2TokenContext extends Context {
 		 * @return the {@link AbstractBuilder} for further configuration
 		 */
 		public B authorizedScopes(Set<String> authorizedScopes) {
-			return put(OAuth2Authorization.AUTHORIZED_SCOPE_ATTRIBUTE_NAME, authorizedScopes);
+			return put(AUTHORIZED_SCOPE_KEY, authorizedScopes);
 		}
 
 		/**

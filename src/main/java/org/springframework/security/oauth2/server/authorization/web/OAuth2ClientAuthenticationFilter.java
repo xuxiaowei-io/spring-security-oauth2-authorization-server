@@ -23,6 +23,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.springframework.core.log.LogMessage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServletServerHttpResponse;
@@ -117,12 +118,16 @@ public final class OAuth2ClientAuthenticationFilter extends OncePerRequestFilter
 						this.authenticationDetailsSource.buildDetails(request));
 			}
 			if (authenticationRequest != null) {
+				validateClientIdentifier(authenticationRequest);
 				Authentication authenticationResult = this.authenticationManager.authenticate(authenticationRequest);
 				this.authenticationSuccessHandler.onAuthenticationSuccess(request, response, authenticationResult);
 			}
 			filterChain.doFilter(request, response);
 
 		} catch (OAuth2AuthenticationException ex) {
+			if (this.logger.isTraceEnabled()) {
+				this.logger.trace(LogMessage.format("Client authentication failed: %s", ex.getError()), ex);
+			}
 			this.authenticationFailureHandler.onAuthenticationFailure(request, response, ex);
 		}
 	}
@@ -166,6 +171,10 @@ public final class OAuth2ClientAuthenticationFilter extends OncePerRequestFilter
 		SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
 		securityContext.setAuthentication(authentication);
 		SecurityContextHolder.setContext(securityContext);
+		if (this.logger.isDebugEnabled()) {
+			this.logger.debug(LogMessage.format("Set SecurityContextHolder authentication to %s",
+					authentication.getClass().getSimpleName()));
+		}
 	}
 
 	private void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response,
@@ -191,6 +200,27 @@ public final class OAuth2ClientAuthenticationFilter extends OncePerRequestFilter
 		// We don't want to reveal too much information to the caller so just return the error code
 		OAuth2Error errorResponse = new OAuth2Error(error.getErrorCode());
 		this.errorHttpResponseConverter.write(errorResponse, null, httpResponse);
+	}
+
+	private static void validateClientIdentifier(Authentication authentication) {
+		if (!(authentication instanceof OAuth2ClientAuthenticationToken)) {
+			return;
+		}
+
+		// As per spec, in Appendix A.1.
+		// https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-07#appendix-A.1
+		// The syntax for client_id is *VSCHAR (%x20-7E):
+		// -> Hex 20 -> ASCII 32 -> space
+		// -> Hex 7E -> ASCII 126 -> tilde
+
+		OAuth2ClientAuthenticationToken clientAuthentication = (OAuth2ClientAuthenticationToken) authentication;
+		String clientId = (String) clientAuthentication.getPrincipal();
+		for (int i = 0; i < clientId.length(); i++) {
+			char charAt = clientId.charAt(i);
+			if (!(charAt >= 32 && charAt <= 126)) {
+				throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_REQUEST);
+			}
+		}
 	}
 
 }

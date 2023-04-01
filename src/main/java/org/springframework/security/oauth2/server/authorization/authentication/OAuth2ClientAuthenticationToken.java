@@ -23,8 +23,8 @@ import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.Transient;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.Version;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.util.SpringAuthorizationServerVersion;
 import org.springframework.util.Assert;
 
 /**
@@ -42,7 +42,7 @@ import org.springframework.util.Assert;
  */
 @Transient
 public class OAuth2ClientAuthenticationToken extends AbstractAuthenticationToken {
-	private static final long serialVersionUID = Version.SERIAL_VERSION_UID;
+	private static final long serialVersionUID = SpringAuthorizationServerVersion.SERIAL_VERSION_UID;
 	private final String clientId;
 	private final RegisteredClient registeredClient;
 	private final ClientAuthenticationMethod clientAuthenticationMethod;

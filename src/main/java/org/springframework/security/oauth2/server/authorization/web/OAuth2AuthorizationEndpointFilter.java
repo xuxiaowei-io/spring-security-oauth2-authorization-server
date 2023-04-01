@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 the original author or authors.
+ * Copyright 2020-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,8 @@ package org.springframework.security.oauth2.server.authorization.web;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Set;
 
 import javax.servlet.FilterChain;
@@ -25,12 +26,15 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.springframework.core.log.LogMessage;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.authentication.AuthenticationDetailsSource;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationResponse;
@@ -39,12 +43,18 @@ import org.springframework.security.oauth2.core.oidc.OidcScopes;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationCodeRequestAuthenticationException;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationCodeRequestAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationCodeRequestAuthenticationToken;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationConsentAuthenticationProvider;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationConsentAuthenticationToken;
+import org.springframework.security.oauth2.server.authorization.web.authentication.DelegatingAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2AuthorizationCodeRequestAuthenticationConverter;
+import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2AuthorizationConsentAuthenticationConverter;
 import org.springframework.security.web.DefaultRedirectStrategy;
 import org.springframework.security.web.RedirectStrategy;
 import org.springframework.security.web.authentication.AuthenticationConverter;
 import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.util.RedirectUrlBuilder;
 import org.springframework.security.web.util.UrlUtils;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
@@ -56,10 +66,11 @@ import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
 
 /**
  * A {@code Filter} for the OAuth 2.0 Authorization Code Grant,
- * which handles the processing of the OAuth 2.0 Authorization Request (and Consent).
+ * which handles the processing of the OAuth 2.0 Authorization Request and Consent.
  *
  * @author Joe Grandja
  * @author Paurav Munshi
@@ -69,6 +80,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * @since 0.0.1
  * @see AuthenticationManager
  * @see OAuth2AuthorizationCodeRequestAuthenticationProvider
+ * @see OAuth2AuthorizationConsentAuthenticationProvider
  * @see <a target="_blank" href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1">Section 4.1 Authorization Code Grant</a>
  * @see <a target="_blank" href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1">Section 4.1.1 Authorization Request</a>
  * @see <a target="_blank" href="https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2">Section 4.1.2 Authorization Response</a>
@@ -82,9 +94,11 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 	private final AuthenticationManager authenticationManager;
 	private final RequestMatcher authorizationEndpointMatcher;
 	private final RedirectStrategy redirectStrategy = new DefaultRedirectStrategy();
+	private AuthenticationDetailsSource<HttpServletRequest, ?> authenticationDetailsSource = new WebAuthenticationDetailsSource();
 	private AuthenticationConverter authenticationConverter;
 	private AuthenticationSuccessHandler authenticationSuccessHandler = this::sendAuthorizationResponse;
 	private AuthenticationFailureHandler authenticationFailureHandler = this::sendErrorResponse;
+	private SessionAuthenticationStrategy sessionAuthenticationStrategy = (authentication, request, response) -> {};
 	private String consentPage;
 
 	/**
@@ -107,7 +121,10 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 		Assert.hasText(authorizationEndpointUri, "authorizationEndpointUri cannot be empty");
 		this.authenticationManager = authenticationManager;
 		this.authorizationEndpointMatcher = createDefaultRequestMatcher(authorizationEndpointUri);
-		this.authenticationConverter = new OAuth2AuthorizationCodeRequestAuthenticationConverter();
+		this.authenticationConverter = new DelegatingAuthenticationConverter(
+				Arrays.asList(
+						new OAuth2AuthorizationCodeRequestAuthenticationConverter(),
+						new OAuth2AuthorizationConsentAuthenticationConverter()));
 	}
 
 	private static RequestMatcher createDefaultRequestMatcher(String authorizationEndpointUri) {
@@ -142,13 +159,14 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 		}
 
 		try {
-			OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthentication =
-					(OAuth2AuthorizationCodeRequestAuthenticationToken) this.authenticationConverter.convert(request);
+			Authentication authentication = this.authenticationConverter.convert(request);
+			if (authentication instanceof AbstractAuthenticationToken) {
+				((AbstractAuthenticationToken) authentication)
+						.setDetails(this.authenticationDetailsSource.buildDetails(request));
+			}
+			Authentication authenticationResult = this.authenticationManager.authenticate(authentication);
 
-			OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthenticationResult =
-					(OAuth2AuthorizationCodeRequestAuthenticationToken) this.authenticationManager.authenticate(authorizationCodeRequestAuthentication);
-
-			if (!authorizationCodeRequestAuthenticationResult.isAuthenticated()) {
+			if (!authenticationResult.isAuthenticated()) {
 				// If the Principal (Resource Owner) is not authenticated then
 				// pass through the chain with the expectation that the authentication process
 				// will commence via AuthenticationEntryPoint
@@ -156,22 +174,45 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 				return;
 			}
 
-			if (authorizationCodeRequestAuthenticationResult.isConsentRequired()) {
-				sendAuthorizationConsent(request, response, authorizationCodeRequestAuthentication, authorizationCodeRequestAuthenticationResult);
+			if (authenticationResult instanceof OAuth2AuthorizationConsentAuthenticationToken) {
+				if (this.logger.isTraceEnabled()) {
+					this.logger.trace("Authorization consent is required");
+				}
+				sendAuthorizationConsent(request, response,
+						(OAuth2AuthorizationCodeRequestAuthenticationToken) authentication,
+						(OAuth2AuthorizationConsentAuthenticationToken) authenticationResult);
 				return;
 			}
 
+			this.sessionAuthenticationStrategy.onAuthentication(
+					authenticationResult, request, response);
+
 			this.authenticationSuccessHandler.onAuthenticationSuccess(
-					request, response, authorizationCodeRequestAuthenticationResult);
+					request, response, authenticationResult);
 
 		} catch (OAuth2AuthenticationException ex) {
+			if (this.logger.isTraceEnabled()) {
+				this.logger.trace(LogMessage.format("Authorization request failed: %s", ex.getError()), ex);
+			}
 			this.authenticationFailureHandler.onAuthenticationFailure(request, response, ex);
 		}
 	}
 
 	/**
+	 * Sets the {@link AuthenticationDetailsSource} used for building an authentication details instance from {@link HttpServletRequest}.
+	 *
+	 * @param authenticationDetailsSource the {@link AuthenticationDetailsSource} used for building an authentication details instance from {@link HttpServletRequest}
+	 * @since 0.3.1
+	 */
+	public void setAuthenticationDetailsSource(AuthenticationDetailsSource<HttpServletRequest, ?> authenticationDetailsSource) {
+		Assert.notNull(authenticationDetailsSource, "authenticationDetailsSource cannot be null");
+		this.authenticationDetailsSource = authenticationDetailsSource;
+	}
+
+	/**
 	 * Sets the {@link AuthenticationConverter} used when attempting to extract an Authorization Request (or Consent) from {@link HttpServletRequest}
-	 * to an instance of {@link OAuth2AuthorizationCodeRequestAuthenticationToken} used for authenticating the request.
+	 * to an instance of {@link OAuth2AuthorizationCodeRequestAuthenticationToken} or {@link OAuth2AuthorizationConsentAuthenticationToken}
+	 * used for authenticating the request.
 	 *
 	 * @param authenticationConverter the {@link AuthenticationConverter} used when attempting to extract an Authorization Request (or Consent) from {@link HttpServletRequest}
 	 */
@@ -203,6 +244,19 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 	}
 
 	/**
+	 * Sets the {@link SessionAuthenticationStrategy} used for handling an {@link OAuth2AuthorizationCodeRequestAuthenticationToken}
+	 * before calling the {@link AuthenticationSuccessHandler}.
+	 * If OpenID Connect is enabled, the default implementation tracks OpenID Connect sessions using a {@link SessionRegistry}.
+	 *
+	 * @param sessionAuthenticationStrategy the {@link SessionAuthenticationStrategy} used for handling an {@link OAuth2AuthorizationCodeRequestAuthenticationToken}
+	 * @since 1.1.0
+	 */
+	public void setSessionAuthenticationStrategy(SessionAuthenticationStrategy sessionAuthenticationStrategy) {
+		Assert.notNull(sessionAuthenticationStrategy, "sessionAuthenticationStrategy cannot be null");
+		this.sessionAuthenticationStrategy = sessionAuthenticationStrategy;
+	}
+
+	/**
 	 * Specify the URI to redirect Resource Owners to if consent is required. A default consent
 	 * page will be generated when this attribute is not specified.
 	 *
@@ -214,13 +268,13 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 
 	private void sendAuthorizationConsent(HttpServletRequest request, HttpServletResponse response,
 			OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthentication,
-			OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthenticationResult) throws IOException {
+			OAuth2AuthorizationConsentAuthenticationToken authorizationConsentAuthentication) throws IOException {
 
-		String clientId = authorizationCodeRequestAuthenticationResult.getClientId();
-		Authentication principal = (Authentication) authorizationCodeRequestAuthenticationResult.getPrincipal();
+		String clientId = authorizationConsentAuthentication.getClientId();
+		Authentication principal = (Authentication) authorizationConsentAuthentication.getPrincipal();
 		Set<String> requestedScopes = authorizationCodeRequestAuthentication.getScopes();
-		Set<String> authorizedScopes = authorizationCodeRequestAuthenticationResult.getScopes();
-		String state = authorizationCodeRequestAuthenticationResult.getState();
+		Set<String> authorizedScopes = authorizationConsentAuthentication.getScopes();
+		String state = authorizationConsentAuthentication.getState();
 
 		if (hasConsentUri()) {
 			String redirectUri = UriComponentsBuilder.fromUriString(resolveConsentUri(request))
@@ -230,7 +284,10 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 					.toUriString();
 			this.redirectStrategy.sendRedirect(request, response, redirectUri);
 		} else {
-			DefaultConsentPage.displayConsent(request, response, clientId, principal, requestedScopes, authorizedScopes, state);
+			if (this.logger.isTraceEnabled()) {
+				this.logger.trace("Displaying generated consent screen");
+			}
+			DefaultConsentPage.displayConsent(request, response, clientId, principal, requestedScopes, authorizedScopes, state, Collections.emptyMap());
 		}
 	}
 
@@ -260,9 +317,12 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 				.fromUriString(authorizationCodeRequestAuthentication.getRedirectUri())
 				.queryParam(OAuth2ParameterNames.CODE, authorizationCodeRequestAuthentication.getAuthorizationCode().getTokenValue());
 		if (StringUtils.hasText(authorizationCodeRequestAuthentication.getState())) {
-			uriBuilder.queryParam(OAuth2ParameterNames.STATE, authorizationCodeRequestAuthentication.getState());
+			uriBuilder.queryParam(
+					OAuth2ParameterNames.STATE,
+					UriUtils.encode(authorizationCodeRequestAuthentication.getState(), StandardCharsets.UTF_8));
 		}
-		this.redirectStrategy.sendRedirect(request, response, uriBuilder.toUriString());
+		String redirectUri = uriBuilder.build(true).toUriString();		// build(true) -> Components are explicitly encoded
+		this.redirectStrategy.sendRedirect(request, response, redirectUri);
 	}
 
 	private void sendErrorResponse(HttpServletRequest request, HttpServletResponse response,
@@ -276,127 +336,34 @@ public final class OAuth2AuthorizationEndpointFilter extends OncePerRequestFilte
 
 		if (authorizationCodeRequestAuthentication == null ||
 				!StringUtils.hasText(authorizationCodeRequestAuthentication.getRedirectUri())) {
-			// TODO Send default html error response
 			response.sendError(HttpStatus.BAD_REQUEST.value(), error.toString());
 			return;
+		}
+
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Redirecting to client with error");
 		}
 
 		UriComponentsBuilder uriBuilder = UriComponentsBuilder
 				.fromUriString(authorizationCodeRequestAuthentication.getRedirectUri())
 				.queryParam(OAuth2ParameterNames.ERROR, error.getErrorCode());
 		if (StringUtils.hasText(error.getDescription())) {
-			uriBuilder.queryParam(OAuth2ParameterNames.ERROR_DESCRIPTION, error.getDescription());
+			uriBuilder.queryParam(
+					OAuth2ParameterNames.ERROR_DESCRIPTION,
+					UriUtils.encode(error.getDescription(), StandardCharsets.UTF_8));
 		}
 		if (StringUtils.hasText(error.getUri())) {
-			uriBuilder.queryParam(OAuth2ParameterNames.ERROR_URI, error.getUri());
+			uriBuilder.queryParam(
+					OAuth2ParameterNames.ERROR_URI,
+					UriUtils.encode(error.getUri(), StandardCharsets.UTF_8));
 		}
 		if (StringUtils.hasText(authorizationCodeRequestAuthentication.getState())) {
-			uriBuilder.queryParam(OAuth2ParameterNames.STATE, authorizationCodeRequestAuthentication.getState());
+			uriBuilder.queryParam(
+					OAuth2ParameterNames.STATE,
+					UriUtils.encode(authorizationCodeRequestAuthentication.getState(), StandardCharsets.UTF_8));
 		}
-		this.redirectStrategy.sendRedirect(request, response, uriBuilder.toUriString());
+		String redirectUri = uriBuilder.build(true).toUriString();		// build(true) -> Components are explicitly encoded
+		this.redirectStrategy.sendRedirect(request, response, redirectUri);
 	}
 
-	/**
-	 * For internal use only.
-	 */
-	private static class DefaultConsentPage {
-		private static final MediaType TEXT_HTML_UTF8 = new MediaType("text", "html", StandardCharsets.UTF_8);
-
-		private static void displayConsent(HttpServletRequest request, HttpServletResponse response,
-				String clientId, Authentication principal, Set<String> requestedScopes, Set<String> authorizedScopes, String state)
-				throws IOException {
-
-			String consentPage = generateConsentPage(request, clientId, principal, requestedScopes, authorizedScopes, state);
-			response.setContentType(TEXT_HTML_UTF8.toString());
-			response.setContentLength(consentPage.getBytes(StandardCharsets.UTF_8).length);
-			response.getWriter().write(consentPage);
-		}
-
-		private static String generateConsentPage(HttpServletRequest request,
-				String clientId, Authentication principal, Set<String> requestedScopes, Set<String> authorizedScopes, String state) {
-			Set<String> scopesToAuthorize = new HashSet<>();
-			Set<String> scopesPreviouslyAuthorized = new HashSet<>();
-			for (String scope : requestedScopes) {
-				if (authorizedScopes.contains(scope)) {
-					scopesPreviouslyAuthorized.add(scope);
-				} else if (!scope.equals(OidcScopes.OPENID)) { // openid scope does not require consent
-					scopesToAuthorize.add(scope);
-				}
-			}
-
-			StringBuilder builder = new StringBuilder();
-
-			builder.append("<!DOCTYPE html>");
-			builder.append("<html lang=\"en\">");
-			builder.append("<head>");
-			builder.append("    <meta charset=\"utf-8\">");
-			builder.append("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1, shrink-to-fit=no\">");
-			builder.append("    <link rel=\"stylesheet\" href=\"https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css\" integrity=\"sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z\" crossorigin=\"anonymous\">");
-			builder.append("    <title>Consent required</title>");
-			builder.append("	<script>");
-			builder.append("		function cancelConsent() {");
-			builder.append("			document.consent_form.reset();");
-			builder.append("			document.consent_form.submit();");
-			builder.append("		}");
-			builder.append("	</script>");
-			builder.append("</head>");
-			builder.append("<body>");
-			builder.append("<div class=\"container\">");
-			builder.append("    <div class=\"py-5\">");
-			builder.append("        <h1 class=\"text-center\">Consent required</h1>");
-			builder.append("    </div>");
-			builder.append("    <div class=\"row\">");
-			builder.append("        <div class=\"col text-center\">");
-			builder.append("            <p><span class=\"font-weight-bold text-primary\">" + clientId + "</span> wants to access your account <span class=\"font-weight-bold\">" + principal.getName() + "</span></p>");
-			builder.append("        </div>");
-			builder.append("    </div>");
-			builder.append("    <div class=\"row pb-3\">");
-			builder.append("        <div class=\"col text-center\">");
-			builder.append("            <p>The following permissions are requested by the above app.<br/>Please review these and consent if you approve.</p>");
-			builder.append("        </div>");
-			builder.append("    </div>");
-			builder.append("    <div class=\"row\">");
-			builder.append("        <div class=\"col text-center\">");
-			builder.append("            <form name=\"consent_form\" method=\"post\" action=\"" + request.getRequestURI() + "\">");
-			builder.append("                <input type=\"hidden\" name=\"client_id\" value=\"" + clientId + "\">");
-			builder.append("                <input type=\"hidden\" name=\"state\" value=\"" + state + "\">");
-
-			for (String scope : scopesToAuthorize) {
-				builder.append("                <div class=\"form-group form-check py-1\">");
-				builder.append("                    <input class=\"form-check-input\" type=\"checkbox\" name=\"scope\" value=\"" + scope + "\" id=\"" + scope + "\">");
-				builder.append("                    <label class=\"form-check-label\" for=\"" + scope + "\">" + scope + "</label>");
-				builder.append("                </div>");
-			}
-
-			if (!scopesPreviouslyAuthorized.isEmpty()) {
-				builder.append("                <p>You have already granted the following permissions to the above app:</p>");
-				for (String scope : scopesPreviouslyAuthorized) {
-					builder.append("                <div class=\"form-group form-check py-1\">");
-					builder.append("                    <input class=\"form-check-input\" type=\"checkbox\" name=\"scope\" id=\"" + scope + "\" checked disabled>");
-					builder.append("                    <label class=\"form-check-label\" for=\"" + scope + "\">" + scope + "</label>");
-					builder.append("                </div>");
-				}
-			}
-
-			builder.append("                <div class=\"form-group pt-3\">");
-			builder.append("                    <button class=\"btn btn-primary btn-lg\" type=\"submit\" id=\"submit-consent\">Submit Consent</button>");
-			builder.append("                </div>");
-			builder.append("                <div class=\"form-group\">");
-			builder.append("                    <button class=\"btn btn-link regular\" type=\"button\" onclick=\"cancelConsent();\" id=\"cancel-consent\">Cancel</button>");
-			builder.append("                </div>");
-			builder.append("            </form>");
-			builder.append("        </div>");
-			builder.append("    </div>");
-			builder.append("    <div class=\"row pt-4\">");
-			builder.append("        <div class=\"col text-center\">");
-			builder.append("            <p><small>Your consent to provide access is required.<br/>If you do not approve, click Cancel, in which case no information will be shared with the app.</small></p>");
-			builder.append("        </div>");
-			builder.append("    </div>");
-			builder.append("</div>");
-			builder.append("</body>");
-			builder.append("</html>");
-
-			return builder.toString();
-		}
-	}
 }

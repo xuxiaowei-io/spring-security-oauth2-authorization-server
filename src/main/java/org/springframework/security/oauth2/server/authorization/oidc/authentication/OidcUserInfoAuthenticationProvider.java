@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 the original author or authors.
+ * Copyright 2020-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,19 +23,22 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
-import org.springframework.security.oauth2.core.OAuth2TokenType;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
 import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
 import org.springframework.security.oauth2.core.oidc.StandardClaimNames;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.resource.authentication.AbstractOAuth2TokenAuthenticationToken;
 import org.springframework.util.Assert;
 
@@ -48,6 +51,7 @@ import org.springframework.util.Assert;
  * @see <a href="https://openid.net/specs/openid-connect-core-1_0.html#UserInfo">5.3. UserInfo Endpoint</a>
  */
 public final class OidcUserInfoAuthenticationProvider implements AuthenticationProvider {
+	private final Log logger = LogFactory.getLog(getClass());
 	private final OAuth2AuthorizationService authorizationService;
 	private Function<OidcUserInfoAuthenticationContext, OidcUserInfo> userInfoMapper = new DefaultOidcUserInfoMapper();
 
@@ -82,6 +86,10 @@ public final class OidcUserInfoAuthenticationProvider implements AuthenticationP
 			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_TOKEN);
 		}
 
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Retrieved authorization with access token");
+		}
+
 		OAuth2Authorization.Token<OAuth2AccessToken> authorizedAccessToken = authorization.getAccessToken();
 		if (!authorizedAccessToken.isActive()) {
 			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_TOKEN);
@@ -96,12 +104,20 @@ public final class OidcUserInfoAuthenticationProvider implements AuthenticationP
 			throw new OAuth2AuthenticationException(OAuth2ErrorCodes.INVALID_TOKEN);
 		}
 
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Validated user info request");
+		}
+
 		OidcUserInfoAuthenticationContext authenticationContext =
 				OidcUserInfoAuthenticationContext.with(userInfoAuthentication)
 						.accessToken(authorizedAccessToken.getToken())
 						.authorization(authorization)
 						.build();
 		OidcUserInfo userInfo = this.userInfoMapper.apply(authenticationContext);
+
+		if (this.logger.isTraceEnabled()) {
+			this.logger.trace("Authenticated user info request");
+		}
 
 		return new OidcUserInfoAuthenticationToken(accessTokenAuthentication, userInfo);
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 the original author or authors.
+ * Copyright 2020-2022 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,17 +15,17 @@
  */
 package org.springframework.security.oauth2.server.authorization.authentication;
 
+import java.util.Collections;
+import java.util.Map;
+
 import org.springframework.lang.Nullable;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
-import org.springframework.security.oauth2.core.Version;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.util.SpringAuthorizationServerVersion;
 import org.springframework.util.Assert;
-
-import java.util.Collections;
-import java.util.Map;
 
 /**
  * An {@link Authentication} implementation used when issuing an
@@ -41,7 +41,7 @@ import java.util.Map;
  * @see OAuth2ClientAuthenticationToken
  */
 public class OAuth2AccessTokenAuthenticationToken extends AbstractAuthenticationToken {
-	private static final long serialVersionUID = Version.SERIAL_VERSION_UID;
+	private static final long serialVersionUID = SpringAuthorizationServerVersion.SERIAL_VERSION_UID;
 	private final RegisteredClient registeredClient;
 	private final Authentication clientPrincipal;
 	private final OAuth2AccessToken accessToken;
