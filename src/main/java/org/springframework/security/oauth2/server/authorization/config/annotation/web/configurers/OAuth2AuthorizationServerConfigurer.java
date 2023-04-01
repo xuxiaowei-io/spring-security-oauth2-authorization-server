@@ -272,7 +272,9 @@ public final class OAuth2AuthorizationServerConfigurer
 			OAuth2AuthorizationEndpointConfigurer authorizationEndpointConfigurer =
 					getConfigurer(OAuth2AuthorizationEndpointConfigurer.class);
 			authorizationEndpointConfigurer.setSessionAuthenticationStrategy((authentication, request, response) -> {
-				if (authentication instanceof OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthentication) {
+				if (authentication instanceof OAuth2AuthorizationCodeRequestAuthenticationToken) {
+					OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthentication = (OAuth2AuthorizationCodeRequestAuthenticationToken) authentication;
+
 					if (authorizationCodeRequestAuthentication.getScopes().contains(OidcScopes.OPENID)) {
 						if (sessionRegistry.getSessionInformation(request.getSession().getId()) == null) {
 							sessionRegistry.registerNewSession(

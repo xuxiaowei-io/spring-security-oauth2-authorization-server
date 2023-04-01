@@ -53,7 +53,7 @@ import org.springframework.util.StringUtils;
 public class OAuth2DeviceAuthorizationResponseHttpMessageConverter
         extends AbstractHttpMessageConverter<OAuth2DeviceAuthorizationResponse> {
 
-    private static final ParameterizedTypeReference<Map<String, Object>> STRING_OBJECT_MAP = new ParameterizedTypeReference<>() {
+    private static final ParameterizedTypeReference<Map<String, Object>> STRING_OBJECT_MAP = new ParameterizedTypeReference<Map<String, Object>>() {
     };
 
     private final GenericHttpMessageConverter<Object> jsonMessageConvereter = HttpMessageConverters
