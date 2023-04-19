@@ -20,7 +20,6 @@ import java.util.List;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -46,7 +45,7 @@ import org.springframework.util.StringUtils;
  * An {@link AuthenticationProvider} implementation for OpenID Connect 1.0 RP-Initiated Logout Endpoint.
  *
  * @author Joe Grandja
- * @since 1.1.0
+ * @since 1.1
  * @see RegisteredClientRepository
  * @see OAuth2AuthorizationService
  * @see SessionRegistry
@@ -83,13 +82,18 @@ public final class OidcLogoutAuthenticationProvider implements AuthenticationPro
 				(OidcLogoutAuthenticationToken) authentication;
 
 		OAuth2Authorization authorization = this.authorizationService.findByToken(
-				oidcLogoutAuthentication.getIdToken(), ID_TOKEN_TOKEN_TYPE);
+				oidcLogoutAuthentication.getIdTokenHint(), ID_TOKEN_TOKEN_TYPE);
 		if (authorization == null) {
 			throwError(OAuth2ErrorCodes.INVALID_TOKEN, "id_token_hint");
 		}
 
 		if (this.logger.isTraceEnabled()) {
 			this.logger.trace("Retrieved authorization with ID Token");
+		}
+
+		OAuth2Authorization.Token<OidcIdToken> authorizedIdToken = authorization.getToken(OidcIdToken.class);
+		if (!authorizedIdToken.isActive()) {
+			throwError(OAuth2ErrorCodes.INVALID_TOKEN, "id_token_hint");
 		}
 
 		RegisteredClient registeredClient = this.registeredClientRepository.findById(
@@ -99,7 +103,7 @@ public final class OidcLogoutAuthenticationProvider implements AuthenticationPro
 			this.logger.trace("Retrieved registered client");
 		}
 
-		OidcIdToken idToken = authorization.getToken(OidcIdToken.class).getToken();
+		OidcIdToken idToken = authorizedIdToken.getToken();
 
 		// Validate client identity
 		List<String> audClaim = idToken.getAudience();
@@ -109,7 +113,7 @@ public final class OidcLogoutAuthenticationProvider implements AuthenticationPro
 		}
 		if (StringUtils.hasText(oidcLogoutAuthentication.getClientId()) &&
 				!oidcLogoutAuthentication.getClientId().equals(registeredClient.getClientId())) {
-			throwError(OAuth2ErrorCodes.INVALID_TOKEN, OAuth2ParameterNames.CLIENT_ID);
+			throwError(OAuth2ErrorCodes.INVALID_REQUEST, OAuth2ParameterNames.CLIENT_ID);
 		}
 		if (StringUtils.hasText(oidcLogoutAuthentication.getPostLogoutRedirectUri()) &&
 				!registeredClient.getPostLogoutRedirectUris().contains(oidcLogoutAuthentication.getPostLogoutRedirectUri())) {
@@ -120,18 +124,24 @@ public final class OidcLogoutAuthenticationProvider implements AuthenticationPro
 			this.logger.trace("Validated logout request parameters");
 		}
 
-		// Validate user session
-		SessionInformation sessionInformation = null;
-		Authentication userPrincipal = (Authentication) oidcLogoutAuthentication.getPrincipal();
-		if (isPrincipalAuthenticated(userPrincipal) &&
-				StringUtils.hasText(oidcLogoutAuthentication.getSessionId())) {
-			sessionInformation = findSessionInformation(
-					userPrincipal, oidcLogoutAuthentication.getSessionId());
-			if (sessionInformation != null) {
-				String sidClaim = idToken.getClaim("sid");
-				if (!StringUtils.hasText(sidClaim) ||
-						!sidClaim.equals(sessionInformation.getSessionId())) {
-					throwError(OAuth2ErrorCodes.INVALID_TOKEN, "sid");
+		// Validate user identity
+		if (oidcLogoutAuthentication.isPrincipalAuthenticated()) {
+			Authentication userPrincipal = (Authentication) oidcLogoutAuthentication.getPrincipal();
+			if (!StringUtils.hasText(idToken.getSubject()) ||
+					!idToken.getSubject().equals(userPrincipal.getName())) {
+				throwError(OAuth2ErrorCodes.INVALID_TOKEN, IdTokenClaimNames.SUB);
+			}
+
+			// Check for active session
+			if (StringUtils.hasText(oidcLogoutAuthentication.getSessionId())) {
+				SessionInformation sessionInformation = findSessionInformation(
+						userPrincipal, oidcLogoutAuthentication.getSessionId());
+				if (sessionInformation != null) {
+					String sidClaim = idToken.getClaim("sid");
+					if (!StringUtils.hasText(sidClaim) ||
+							!sidClaim.equals(sessionInformation.getSessionId())) {
+						throwError(OAuth2ErrorCodes.INVALID_TOKEN, "sid");
+					}
 				}
 			}
 		}
@@ -140,20 +150,14 @@ public final class OidcLogoutAuthenticationProvider implements AuthenticationPro
 			this.logger.trace("Authenticated logout request");
 		}
 
-		return new OidcLogoutAuthenticationToken(oidcLogoutAuthentication.getIdToken(), userPrincipal,
-				sessionInformation, oidcLogoutAuthentication.getClientId(),
+		return new OidcLogoutAuthenticationToken(idToken, (Authentication) oidcLogoutAuthentication.getPrincipal(),
+				oidcLogoutAuthentication.getSessionId(), oidcLogoutAuthentication.getClientId(),
 				oidcLogoutAuthentication.getPostLogoutRedirectUri(), oidcLogoutAuthentication.getState());
 	}
 
 	@Override
 	public boolean supports(Class<?> authentication) {
 		return OidcLogoutAuthenticationToken.class.isAssignableFrom(authentication);
-	}
-
-	private static boolean isPrincipalAuthenticated(Authentication principal) {
-		return principal != null &&
-				!AnonymousAuthenticationToken.class.isAssignableFrom(principal.getClass()) &&
-				principal.isAuthenticated();
 	}
 
 	private SessionInformation findSessionInformation(Authentication principal, String sessionId) {

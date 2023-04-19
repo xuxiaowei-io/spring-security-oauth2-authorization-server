@@ -55,16 +55,18 @@ public final class AuthorizationServerSettings extends AbstractSettings {
 	/**
 	 * Returns the OAuth 2.0 Device Authorization endpoint. The default is {@code /oauth2/device_authorization}.
 	 *
-	 * @return the Authorization endpoint
+	 * @return the Device Authorization endpoint
+	 * @since 1.1
 	 */
 	public String getDeviceAuthorizationEndpoint() {
 		return getSetting(ConfigurationSettingNames.AuthorizationServer.DEVICE_AUTHORIZATION_ENDPOINT);
 	}
 
 	/**
-	 * Returns the OAuth 2.0 Device VERIFICATION endpoint. The default is {@code /oauth2/device_verification}.
+	 * Returns the OAuth 2.0 Device Verification endpoint. The default is {@code /oauth2/device_verification}.
 	 *
-	 * @return the Authorization endpoint
+	 * @return the Device Verification endpoint
+	 * @since 1.1
 	 */
 	public String getDeviceVerificationEndpoint() {
 		return getSetting(ConfigurationSettingNames.AuthorizationServer.DEVICE_VERIFICATION_ENDPOINT);
@@ -128,7 +130,7 @@ public final class AuthorizationServerSettings extends AbstractSettings {
 	 * Returns the OpenID Connect 1.0 Logout endpoint. The default is {@code /connect/logout}.
 	 *
 	 * @return the OpenID Connect 1.0 Logout endpoint
-	 * @since 1.1.0
+	 * @since 1.1
 	 */
 	public String getOidcLogoutEndpoint() {
 		return getSetting(ConfigurationSettingNames.AuthorizationServer.OIDC_LOGOUT_ENDPOINT);
@@ -198,6 +200,7 @@ public final class AuthorizationServerSettings extends AbstractSettings {
 		 *
 		 * @param deviceAuthorizationEndpoint the Device Authorization endpoint
 		 * @return the {@link Builder} for further configuration
+		 * @since 1.1
 		 */
 		public Builder deviceAuthorizationEndpoint(String deviceAuthorizationEndpoint) {
 			return setting(ConfigurationSettingNames.AuthorizationServer.DEVICE_AUTHORIZATION_ENDPOINT, deviceAuthorizationEndpoint);
@@ -208,6 +211,7 @@ public final class AuthorizationServerSettings extends AbstractSettings {
 		 *
 		 * @param deviceVerificationEndpoint the Device Verification endpoint
 		 * @return the {@link Builder} for further configuration
+		 * @since 1.1
 		 */
 		public Builder deviceVerificationEndpoint(String deviceVerificationEndpoint) {
 			return setting(ConfigurationSettingNames.AuthorizationServer.DEVICE_VERIFICATION_ENDPOINT, deviceVerificationEndpoint);
@@ -278,7 +282,7 @@ public final class AuthorizationServerSettings extends AbstractSettings {
 		 *
 		 * @param oidcLogoutEndpoint the OpenID Connect 1.0 Logout endpoint
 		 * @return the {@link Builder} for further configuration
-		 * @since 1.1.0
+		 * @since 1.1
 		 */
 		public Builder oidcLogoutEndpoint(String oidcLogoutEndpoint) {
 			return setting(ConfigurationSettingNames.AuthorizationServer.OIDC_LOGOUT_ENDPOINT, oidcLogoutEndpoint);
