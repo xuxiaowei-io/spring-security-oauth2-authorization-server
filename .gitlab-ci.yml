@@ -39,7 +39,7 @@ deploy:
     - if: $CI_COMMIT_BRANCH != "main" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == null
       changes:
         - ".mvn/**"
-        - "src/**"
+        - "src/**/*"
         - ".gitlab-ci.yml"
         - "mvnw"
         - "mvnw.cmd"
