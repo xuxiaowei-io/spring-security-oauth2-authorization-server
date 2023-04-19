@@ -1,4 +1,4 @@
-# 本项目为 [spring-authorization-server](https://github.com/spring-projects/spring-authorization-server) JDK 8、Spring 6.x.x（即：spring-boot 3.0.0） 的适配项目。
+# 本项目为 [spring-authorization-server](https://github.com/spring-projects/spring-authorization-server) JDK 8/17、Spring 5.x.x/6.x.x（即：spring-boot 2.x.x/3.x.x） 的适配项目。
 
 ## 发布内容参见 [GitLab](https://gitlab.com/xuxiaowei-io/spring-security-oauth2-authorization-server/-/pipelines)
 
@@ -40,3 +40,20 @@
 ```shell
 gradlew :spring-security-oauth2-authorization-server:dependencies > D:\spring-authorization-server.txt
 ```
+
+## 批量添加远端仓库地址
+
+<details>
+<summary>点击展开</summary>
+git remote add gitee https://gitee.com/xuxiaowei-io/spring-security-oauth2-authorization-server.git
+
+git remote add gitlab https://gitlab.com/xuxiaowei-io/spring-security-oauth2-authorization-server.git
+
+git remote add jihulab https://jihulab.com/xuxiaowei-io/spring-security-oauth2-authorization-server.git
+
+git remote add github https://github.com/xuxiaowei-io/spring-security-oauth2-authorization-server.git
+
+git remote add gitcode https://gitcode.net/xuxiaowei-io/spring-security-oauth2-authorization-server.git
+
+git remote add gitlink https://gitlink.org.cn/xuxiaowei-io/spring-security-oauth2-authorization-server.git
+</details>
