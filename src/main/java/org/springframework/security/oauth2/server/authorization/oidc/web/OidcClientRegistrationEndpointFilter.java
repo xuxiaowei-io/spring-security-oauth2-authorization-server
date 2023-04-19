@@ -174,7 +174,7 @@ public final class OidcClientRegistrationEndpointFilter extends OncePerRequestFi
 	 * and returning the {@link OidcClientRegistration Client Registration Response}.
 	 *
 	 * @param authenticationSuccessHandler the {@link AuthenticationSuccessHandler} used for handling an {@link OidcClientRegistrationAuthenticationToken}
-	 * @see 0.4.0
+	 * @since 0.4.0
 	 */
 	public void setAuthenticationSuccessHandler(AuthenticationSuccessHandler authenticationSuccessHandler) {
 		Assert.notNull(authenticationSuccessHandler, "authenticationSuccessHandler cannot be null");
