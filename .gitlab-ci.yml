@@ -37,3 +37,11 @@ deploy:
       - target/spring-security-oauth2-authorization-server-*
   rules:
     - if: $CI_COMMIT_BRANCH != "main" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == null
+      changes:
+        - ".mvn/**"
+        - "src/**"
+        - ".gitlab-ci.yml"
+        - "mvnw"
+        - "mvnw.cmd"
+        - "pom.xml"
+        - "!README.md"
