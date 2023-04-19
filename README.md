@@ -10,6 +10,24 @@
     - 1.x
         - 支持 JDK 17
 
+- 本项目分为两个产品线
+    - 1.x 之前
+        - [0.3.0](https://s01.oss.sonatype.org/content/repositories/public/io/xuxiaowei/security/spring-security-oauth2-authorization-server/0.3.0/)
+          -
+          本人学习 [org.springframework.security:spring-security-oauth2-authorization-server](https://s01.oss.sonatype.org/content/repositories/public/org/springframework/security/spring-security-oauth2-authorization-server/)
+          时，最新版为 0.3.0，仅支持 JDK 11。所以做了 JDK 8 的迁移。官方在 0.3.1 将 JDK 从 11 降回 8，并宣布以后在 1.x 之前使用
+          JDK 8，1.x 使用 JDK 17。
+        - [next-0.3.0](https://s01.oss.sonatype.org/content/repositories/public/io/xuxiaowei/security/next/spring-security-oauth2-authorization-server/0.3.0/)
+            - 在官方未发布 1.x 之前时，将仅支持 JDK 8 的版本迁移至 JDK 17
+        - [next-0.3.1](https://s01.oss.sonatype.org/content/repositories/public/io/xuxiaowei/security/next/spring-security-oauth2-authorization-server/0.3.1/)
+            - 在官方未发布 1.x 之前时，将仅支持 JDK 8 的版本迁移至 JDK 17
+        - 如无特殊情况，本项目的 1.x 之前的版本将不再更新，可直接使用官方版本。
+    - 1.x-jdk8
+        - 由于官方回复在 1.x
+          之前不再更新新功能，仅进行错误及安全修复：[Does 0.4.x support device authorization ?](https://github.com/spring-projects/spring-authorization-server/issues/1147)。
+        - 新功能（如：设备授权）仅发布在 1.x 版本，而 1.x 仅支持 JDK 17
+        - 为了能在 JDK 8 中使用新功能（如：设备授权），所以发布了 1.x-jdk8 的版本
+
 | [org.springframework.security:spring-security-oauth2-authorization-server](https://s01.oss.sonatype.org/content/repositories/public/org/springframework/security/spring-security-oauth2-authorization-server/) | MANIFEST.MF                                                                                                                                                                                                                                         | 支持 JDK 8                                                                                                                                                                                                          | 支持 JDK 11 | 支持 JDK 17 | 支持 Spring 版本 | 支持 Spring Security | 支持 Spring Boot 版本 |
 |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------|-----------|--------------|--------------------|-------------------|
 | 0.2.0                                                                                                                                                                                                          | [MANIFEST.MF](https://s01.oss.sonatype.org/service/local/repositories/releases/archive/org/springframework/security/spring-security-oauth2-authorization-server/0.2.0/spring-security-oauth2-authorization-server-0.2.0.jar/!/META-INF/MANIFEST.MF) | ✅                                                                                                                                                                                                                 | ✅         | ❌         | 5.7.x        | 5.7.x              | 2.7.x             | 
