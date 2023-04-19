@@ -18,11 +18,6 @@ package org.springframework.security.oauth2.server.authorization.oidc.web;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 import org.springframework.core.log.LogMessage;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -54,11 +49,16 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 /**
  * A {@code Filter} that processes OpenID Connect 1.0 RP-Initiated Logout Requests.
  *
  * @author Joe Grandja
- * @since 1.1.0
+ * @since 1.1
  * @see OidcLogoutAuthenticationConverter
  * @see OidcLogoutAuthenticationProvider
  * @see <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout">2. RP-Initiated Logout</a>
@@ -182,7 +182,8 @@ public final class OidcLogoutEndpointFilter extends OncePerRequestFilter {
 		OidcLogoutAuthenticationToken oidcLogoutAuthentication = (OidcLogoutAuthenticationToken) authentication;
 
 		// Check for active user session
-		if (oidcLogoutAuthentication.getSessionInformation() != null) {
+		if (oidcLogoutAuthentication.isPrincipalAuthenticated() &&
+				StringUtils.hasText(oidcLogoutAuthentication.getSessionId())) {
 			// Perform logout
 			this.logoutHandler.logout(request, response,
 					(Authentication) oidcLogoutAuthentication.getPrincipal());

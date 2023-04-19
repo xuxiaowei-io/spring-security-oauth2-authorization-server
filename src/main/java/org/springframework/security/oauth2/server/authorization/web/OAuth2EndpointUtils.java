@@ -17,10 +17,10 @@ package org.springframework.security.oauth2.server.authorization.web;
 
 import java.util.Map;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+
+import javax.servlet.http.HttpServletRequest;
 
 /**
  * Utility methods for the OAuth 2.0 Protocol Endpoints.

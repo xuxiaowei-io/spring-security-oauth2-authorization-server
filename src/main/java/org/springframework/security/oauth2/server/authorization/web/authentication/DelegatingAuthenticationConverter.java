@@ -19,12 +19,12 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.lang.Nullable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationConverter;
 import org.springframework.util.Assert;
+
+import javax.servlet.http.HttpServletRequest;
 
 /**
  * An {@link AuthenticationConverter} that simply delegates to it's

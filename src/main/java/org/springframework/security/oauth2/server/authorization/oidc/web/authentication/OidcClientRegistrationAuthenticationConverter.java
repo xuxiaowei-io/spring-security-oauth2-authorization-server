@@ -15,8 +15,6 @@
  */
 package org.springframework.security.oauth2.server.authorization.oidc.web.authentication;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.security.core.Authentication;
@@ -31,6 +29,8 @@ import org.springframework.security.oauth2.server.authorization.oidc.http.conver
 import org.springframework.security.oauth2.server.authorization.oidc.web.OidcClientRegistrationEndpointFilter;
 import org.springframework.security.web.authentication.AuthenticationConverter;
 import org.springframework.util.StringUtils;
+
+import javax.servlet.http.HttpServletRequest;
 
 /**
  * Attempts to extract an OpenID Connect 1.0 Dynamic Client Registration (or Client Read) Request from {@link HttpServletRequest}

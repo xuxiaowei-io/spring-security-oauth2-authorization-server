@@ -19,13 +19,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.server.authorization.oidc.authentication.OidcLogoutAuthenticationProvider;
@@ -43,11 +42,13 @@ import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
 
+import javax.servlet.http.HttpServletRequest;
+
 /**
  * Configurer for OpenID Connect 1.0 RP-Initiated Logout Endpoint.
  *
  * @author Joe Grandja
- * @since 1.1.0
+ * @since 1.1
  * @see OidcConfigurer#logoutEndpoint
  * @see OidcLogoutEndpointFilter
  */
@@ -210,7 +211,7 @@ public final class OidcLogoutEndpointConfigurer extends AbstractOAuth2Configurer
 				new OidcLogoutAuthenticationProvider(
 						OAuth2ConfigurerUtils.getRegisteredClientRepository(httpSecurity),
 						OAuth2ConfigurerUtils.getAuthorizationService(httpSecurity),
-						OAuth2ConfigurerUtils.getSessionRegistry(httpSecurity));
+						httpSecurity.getSharedObject(SessionRegistry.class));
 		authenticationProviders.add(oidcLogoutAuthenticationProvider);
 
 		return authenticationProviders;

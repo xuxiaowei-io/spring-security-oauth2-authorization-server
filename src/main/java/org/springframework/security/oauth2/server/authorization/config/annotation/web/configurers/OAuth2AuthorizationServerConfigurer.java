@@ -23,14 +23,19 @@ import java.util.Map;
 
 import com.nimbusds.jose.jwk.source.JWKSource;
 
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.GenericApplicationListenerAdapter;
+import org.springframework.context.event.SmartApplicationListener;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.ExceptionHandlingConfigurer;
+import org.springframework.security.context.DelegatingApplicationListener;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.core.OAuth2Token;
@@ -67,6 +72,8 @@ import org.springframework.util.Assert;
  * @see OAuth2TokenEndpointConfigurer
  * @see OAuth2TokenIntrospectionEndpointConfigurer
  * @see OAuth2TokenRevocationEndpointConfigurer
+ * @see OAuth2DeviceAuthorizationEndpointConfigurer
+ * @see OAuth2DeviceVerificationEndpointConfigurer
  * @see OidcConfigurer
  * @see RegisteredClientRepository
  * @see OAuth2AuthorizationService
@@ -268,13 +275,13 @@ public final class OAuth2AuthorizationServerConfigurer
 
 		if (isOidcEnabled()) {
 			// Add OpenID Connect session tracking capabilities.
-			SessionRegistry sessionRegistry = OAuth2ConfigurerUtils.getSessionRegistry(httpSecurity);
+			initSessionRegistry(httpSecurity);
+			SessionRegistry sessionRegistry = httpSecurity.getSharedObject(SessionRegistry.class);
 			OAuth2AuthorizationEndpointConfigurer authorizationEndpointConfigurer =
 					getConfigurer(OAuth2AuthorizationEndpointConfigurer.class);
 			authorizationEndpointConfigurer.setSessionAuthenticationStrategy((authentication, request, response) -> {
 				if (authentication instanceof OAuth2AuthorizationCodeRequestAuthenticationToken) {
 					OAuth2AuthorizationCodeRequestAuthenticationToken authorizationCodeRequestAuthentication = (OAuth2AuthorizationCodeRequestAuthenticationToken) authentication;
-
 					if (authorizationCodeRequestAuthentication.getScopes().contains(OidcScopes.OPENID)) {
 						if (sessionRegistry.getSessionInformation(request.getSession().getId()) == null) {
 							sessionRegistry.registerNewSession(
@@ -318,7 +325,8 @@ public final class OAuth2AuthorizationServerConfigurer
 					new OrRequestMatcher(
 							getRequestMatcher(OAuth2TokenEndpointConfigurer.class),
 							getRequestMatcher(OAuth2TokenIntrospectionEndpointConfigurer.class),
-							getRequestMatcher(OAuth2TokenRevocationEndpointConfigurer.class))
+							getRequestMatcher(OAuth2TokenRevocationEndpointConfigurer.class),
+							getRequestMatcher(OAuth2DeviceAuthorizationEndpointConfigurer.class))
 			);
 		}
 	}
@@ -385,6 +393,25 @@ public final class OAuth2AuthorizationServerConfigurer
 				throw new IllegalArgumentException("issuer cannot contain query or fragment component");
 			}
 		}
+	}
+
+	private static void initSessionRegistry(HttpSecurity httpSecurity) {
+		SessionRegistry sessionRegistry = OAuth2ConfigurerUtils.getOptionalBean(httpSecurity, SessionRegistry.class);
+		if (sessionRegistry == null) {
+			sessionRegistry = new SessionRegistryImpl();
+			registerDelegateApplicationListener(httpSecurity, (SessionRegistryImpl) sessionRegistry);
+		}
+		httpSecurity.setSharedObject(SessionRegistry.class, sessionRegistry);
+	}
+
+	private static void registerDelegateApplicationListener(HttpSecurity httpSecurity, ApplicationListener<?> delegate) {
+		DelegatingApplicationListener delegatingApplicationListener =
+				OAuth2ConfigurerUtils.getOptionalBean(httpSecurity, DelegatingApplicationListener.class);
+		if (delegatingApplicationListener == null) {
+			return;
+		}
+		SmartApplicationListener smartListener = new GenericApplicationListenerAdapter(delegate);
+		delegatingApplicationListener.addListener(smartListener);
 	}
 
 }

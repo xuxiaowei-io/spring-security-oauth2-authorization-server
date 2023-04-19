@@ -19,8 +19,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -53,6 +51,8 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
+
+import javax.servlet.http.HttpServletRequest;
 
 /**
  * Configurer for the OAuth 2.0 Token Endpoint.
@@ -220,11 +220,13 @@ public final class OAuth2TokenEndpointConfigurer extends AbstractOAuth2Configure
 
 		OAuth2AuthorizationService authorizationService = OAuth2ConfigurerUtils.getAuthorizationService(httpSecurity);
 		OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator = OAuth2ConfigurerUtils.getTokenGenerator(httpSecurity);
-		SessionRegistry sessionRegistry = OAuth2ConfigurerUtils.getSessionRegistry(httpSecurity);
 
 		OAuth2AuthorizationCodeAuthenticationProvider authorizationCodeAuthenticationProvider =
 				new OAuth2AuthorizationCodeAuthenticationProvider(authorizationService, tokenGenerator);
-		authorizationCodeAuthenticationProvider.setSessionRegistry(sessionRegistry);
+		SessionRegistry sessionRegistry = httpSecurity.getSharedObject(SessionRegistry.class);
+		if (sessionRegistry != null) {
+			authorizationCodeAuthenticationProvider.setSessionRegistry(sessionRegistry);
+		}
 		authenticationProviders.add(authorizationCodeAuthenticationProvider);
 
 		OAuth2RefreshTokenAuthenticationProvider refreshTokenAuthenticationProvider =

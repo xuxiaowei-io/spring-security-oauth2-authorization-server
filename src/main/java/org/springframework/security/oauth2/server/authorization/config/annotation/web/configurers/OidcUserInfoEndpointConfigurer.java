@@ -20,8 +20,6 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -48,6 +46,8 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.util.Assert;
+
+import javax.servlet.http.HttpServletRequest;
 
 /**
  * Configurer for OpenID Connect 1.0 UserInfo Endpoint.

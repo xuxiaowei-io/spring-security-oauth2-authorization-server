@@ -15,8 +15,6 @@
  */
 package org.springframework.security.oauth2.server.authorization.web.authentication;
 
-import javax.servlet.http.HttpServletRequest;
-
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -28,6 +26,8 @@ import org.springframework.security.oauth2.server.authorization.web.OAuth2TokenR
 import org.springframework.security.web.authentication.AuthenticationConverter;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
+
+import javax.servlet.http.HttpServletRequest;
 
 /**
  * Attempts to extract a Revoke Token Request from {@link HttpServletRequest}

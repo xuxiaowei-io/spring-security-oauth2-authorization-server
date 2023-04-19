@@ -49,8 +49,10 @@ import org.springframework.lang.Nullable;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.core.OAuth2DeviceCode;
 import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.OAuth2Token;
+import org.springframework.security.oauth2.core.OAuth2UserCode;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames;
@@ -106,20 +108,31 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			+ "refresh_token_value,"
 			+ "refresh_token_issued_at,"
 			+ "refresh_token_expires_at,"
-			+ "refresh_token_metadata";
+			+ "refresh_token_metadata,"
+			+ "user_code_value,"
+			+ "user_code_issued_at,"
+			+ "user_code_expires_at,"
+			+ "user_code_metadata,"
+			+ "device_code_value,"
+			+ "device_code_issued_at,"
+			+ "device_code_expires_at,"
+			+ "device_code_metadata";
 	// @formatter:on
 
 	private static final String TABLE_NAME = "oauth2_authorization";
 
 	private static final String PK_FILTER = "id = ?";
-	private static final String UNKNOWN_TOKEN_TYPE_FILTER = "state = ? OR authorization_code_value = ? OR " +
-			"access_token_value = ? OR oidc_id_token_value = ? OR refresh_token_value = ?";
+	private static final String UNKNOWN_TOKEN_TYPE_FILTER = "state = ? OR authorization_code_value = ? OR "
+			+ "access_token_value = ? OR oidc_id_token_value = ? OR refresh_token_value = ? OR user_code_value = ? OR "
+			+ "device_code_value = ?";
 
 	private static final String STATE_FILTER = "state = ?";
 	private static final String AUTHORIZATION_CODE_FILTER = "authorization_code_value = ?";
 	private static final String ACCESS_TOKEN_FILTER = "access_token_value = ?";
 	private static final String ID_TOKEN_FILTER = "oidc_id_token_value = ?";
 	private static final String REFRESH_TOKEN_FILTER = "refresh_token_value = ?";
+	private static final String USER_CODE_FILTER = "user_code_value = ?";
+	private static final String DEVICE_CODE_FILTER = "device_code_value = ?";
 
 	// @formatter:off
 	private static final String LOAD_AUTHORIZATION_SQL = "SELECT " + COLUMN_NAMES
@@ -129,7 +142,7 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 
 	// @formatter:off
 	private static final String SAVE_AUTHORIZATION_SQL = "INSERT INTO " + TABLE_NAME
-			+ " (" + COLUMN_NAMES + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+			+ " (" + COLUMN_NAMES + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 	// @formatter:on
 
 	// @formatter:off
@@ -138,7 +151,9 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			+ " authorization_code_value = ?, authorization_code_issued_at = ?, authorization_code_expires_at = ?, authorization_code_metadata = ?,"
 			+ " access_token_value = ?, access_token_issued_at = ?, access_token_expires_at = ?, access_token_metadata = ?, access_token_type = ?, access_token_scopes = ?,"
 			+ " oidc_id_token_value = ?, oidc_id_token_issued_at = ?, oidc_id_token_expires_at = ?, oidc_id_token_metadata = ?,"
-			+ " refresh_token_value = ?, refresh_token_issued_at = ?, refresh_token_expires_at = ?, refresh_token_metadata = ?"
+			+ " refresh_token_value = ?, refresh_token_issued_at = ?, refresh_token_expires_at = ?, refresh_token_metadata = ?,"
+			+ " user_code_value = ?, user_code_issued_at = ?, user_code_expires_at = ?, user_code_metadata = ?,"
+			+ " device_code_value = ?, device_code_issued_at = ?, device_code_expires_at = ?, device_code_metadata = ?"
 			+ " WHERE " + PK_FILTER;
 	// @formatter:on
 
@@ -244,6 +259,8 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			parameters.add(mapToSqlParameter("access_token_value", token));
 			parameters.add(mapToSqlParameter("oidc_id_token_value", token));
 			parameters.add(mapToSqlParameter("refresh_token_value", token));
+			parameters.add(mapToSqlParameter("user_code_value", token));
+			parameters.add(mapToSqlParameter("device_code_value", token));
 			return findBy(UNKNOWN_TOKEN_TYPE_FILTER, parameters);
 		} else if (OAuth2ParameterNames.STATE.equals(tokenType.getValue())) {
 			parameters.add(new SqlParameterValue(Types.VARCHAR, token));
@@ -260,6 +277,12 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 		} else if (OAuth2TokenType.REFRESH_TOKEN.equals(tokenType)) {
 			parameters.add(mapToSqlParameter("refresh_token_value", token));
 			return findBy(REFRESH_TOKEN_FILTER, parameters);
+		} else if (OAuth2ParameterNames.USER_CODE.equals(tokenType.getValue())) {
+			parameters.add(mapToSqlParameter("user_code_value", token));
+			return findBy(USER_CODE_FILTER, parameters);
+		} else if (OAuth2ParameterNames.DEVICE_CODE.equals(tokenType.getValue())) {
+			parameters.add(mapToSqlParameter("device_code_value", token));
+			return findBy(DEVICE_CODE_FILTER, parameters);
 		}
 		return null;
 	}
@@ -425,6 +448,27 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 						refreshTokenValue, tokenIssuedAt, tokenExpiresAt);
 				builder.token(refreshToken, (metadata) -> metadata.putAll(refreshTokenMetadata));
 			}
+
+			String userCodeValue = getLobValue(rs, "user_code_value");
+			if (StringUtils.hasText(userCodeValue)) {
+				tokenIssuedAt = rs.getTimestamp("user_code_issued_at").toInstant();
+				tokenExpiresAt = rs.getTimestamp("user_code_expires_at").toInstant();
+				Map<String, Object> userCodeMetadata = parseMap(getLobValue(rs, "user_code_metadata"));
+
+				OAuth2UserCode userCode = new OAuth2UserCode(userCodeValue, tokenIssuedAt, tokenExpiresAt);
+				builder.token(userCode, (metadata) -> metadata.putAll(userCodeMetadata));
+			}
+
+			String deviceCodeValue = getLobValue(rs, "device_code_value");
+			if (StringUtils.hasText(deviceCodeValue)) {
+				tokenIssuedAt = rs.getTimestamp("device_code_issued_at").toInstant();
+				tokenExpiresAt = rs.getTimestamp("device_code_expires_at").toInstant();
+				Map<String, Object> deviceCodeMetadata = parseMap(getLobValue(rs, "device_code_metadata"));
+
+				OAuth2DeviceCode deviceCode = new OAuth2DeviceCode(deviceCodeValue, tokenIssuedAt, tokenExpiresAt);
+				builder.token(deviceCode, (metadata) -> metadata.putAll(deviceCodeMetadata));
+			}
+
 			return builder.build();
 		}
 
@@ -545,6 +589,17 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 			List<SqlParameterValue> refreshTokenSqlParameters = toSqlParameterList(
 					"refresh_token_value", "refresh_token_metadata", refreshToken);
 			parameters.addAll(refreshTokenSqlParameters);
+
+			OAuth2Authorization.Token<OAuth2UserCode> userCode = authorization.getToken(OAuth2UserCode.class);
+			List<SqlParameterValue> userCodeSqlParameters = toSqlParameterList(
+					"user_code_value", "user_code_metadata", userCode);
+			parameters.addAll(userCodeSqlParameters);
+
+			OAuth2Authorization.Token<OAuth2DeviceCode> deviceCode = authorization.getToken(OAuth2DeviceCode.class);
+			List<SqlParameterValue> deviceCodeSqlParameters = toSqlParameterList(
+					"device_code_value", "device_code_metadata", deviceCode);
+			parameters.addAll(deviceCodeSqlParameters);
+
 			return parameters;
 		}
 
@@ -669,6 +724,14 @@ public class JdbcOAuth2AuthorizationService implements OAuth2AuthorizationServic
 		columnMetadata = getColumnMetadata(jdbcOperations, "refresh_token_value", Types.BLOB);
 		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
 		columnMetadata = getColumnMetadata(jdbcOperations, "refresh_token_metadata", Types.BLOB);
+		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
+		columnMetadata = getColumnMetadata(jdbcOperations, "user_code_value", Types.BLOB);
+		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
+		columnMetadata = getColumnMetadata(jdbcOperations, "user_code_metadata", Types.BLOB);
+		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
+		columnMetadata = getColumnMetadata(jdbcOperations, "device_code_value", Types.BLOB);
+		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
+		columnMetadata = getColumnMetadata(jdbcOperations, "device_code_metadata", Types.BLOB);
 		columnMetadataMap.put(columnMetadata.getColumnName(), columnMetadata);
 	}
 

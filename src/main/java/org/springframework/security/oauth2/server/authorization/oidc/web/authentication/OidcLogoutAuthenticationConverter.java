@@ -17,9 +17,6 @@ package org.springframework.security.oauth2.server.authorization.oidc.web.authen
 
 import java.util.Map;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
-
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -35,12 +32,15 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+
 /**
  * Attempts to extract an OpenID Connect 1.0 RP-Initiated Logout Request from {@link HttpServletRequest}
  * and then converts to an {@link OidcLogoutAuthenticationToken} used for authenticating the request.
  *
  * @author Joe Grandja
- * @since 1.1.0
+ * @since 1.1
  * @see AuthenticationConverter
  * @see OidcLogoutAuthenticationToken
  * @see OidcLogoutEndpointFilter
