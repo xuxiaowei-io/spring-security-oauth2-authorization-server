@@ -63,7 +63,7 @@ public class OAuth2AuthorizationServerConfiguration {
 				.getEndpointsMatcher();
 
 		http
-			.securityMatcher(endpointsMatcher)
+			.requestMatcher(endpointsMatcher)
 			.authorizeHttpRequests(authorize ->
 				authorize.anyRequest().authenticated()
 			)
