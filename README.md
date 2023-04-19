@@ -24,10 +24,11 @@
 |--------------------------------------------------------------------------|----------|-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------|--------------------|-------------------|
 | 1.0.0                                                                    | ❌        | ❌         | ✅ [MANIFEST.MF](https://s01.oss.sonatype.org/service/local/repositories/releases/archive/org/springframework/security/spring-security-oauth2-authorization-server/1.0.0/spring-security-oauth2-authorization-server-1.0.0.jar/!/META-INF/MANIFEST.MF) | 6.x.x        | 6.x.x              | 3.x.x             |
 
-| io.xuxiaowei.security.next:spring-security-oauth2-authorization-server | 支持 JDK 8 | 支持 JDK 11 | 支持 JDK 17 | 支持 Spring 版本 | 支持 Spring Security | 支持 Spring Boot 版本 | 说明                                                                            |
-|------------------------------------------------------------------------|----------|-----------|-----------|--------------|--------------------|-------------------|-------------------------------------------------------------------------------|
-| 0.3.0                                                                  | ❌        | ❌         | ✅         | 6.x.x        | 6.x.x              | 3.x.x             |                                                                               | 
-| 1.1.0-M2-jdk8-*                                                        | ✅        | ✅         | ❌         | 5.x.x        | 5.x.x              | 2.x.x             | 基于 spring-authorization-server 仓库中的 1.1.0-M2 标签，修改为支持 JDK 8、Spring Boot 2.x.x | 
+| io.xuxiaowei.security.next:spring-security-oauth2-authorization-server | 支持 JDK 8 | 支持 JDK 11 | 支持 JDK 17 | 支持 Spring 版本 | 支持 Spring Security | 支持 Spring Boot 版本 | 说明                                                                             |
+|------------------------------------------------------------------------|----------|-----------|-----------|--------------|--------------------|-------------------|--------------------------------------------------------------------------------|
+| 0.3.0                                                                  | ❌        | ❌         | ✅         | 6.x.x        | 6.x.x              | 3.x.x             |                                                                                | 
+| 1.1.0-M2-jdk8-*                                                        | ✅        | ✅         | ❌         | 5.x.x        | 5.x.x              | 2.x.x             | 基于 spring-authorization-server 仓库中的 1.1.0-M2 标签，修改为支持 JDK 8、Spring Boot 2.x.x  | 
+| 1.1.0-RC1-jdk8-*                                                       | ✅        | ✅         | ❌         | 5.x.x        | 5.x.x              | 2.x.x             | 基于 spring-authorization-server 仓库中的 1.1.0-RC1 标签，修改为支持 JDK 8、Spring Boot 2.x.x | 
 
 ## 其他
 
