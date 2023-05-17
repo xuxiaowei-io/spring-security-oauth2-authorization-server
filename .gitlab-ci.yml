@@ -17,9 +17,9 @@ deploy:
     - echo $SETTINGS_FILE
     - sed -i "s#</servers>#<server><id>ossrh</id><username>$ossrh_user</username><password>$ossrh_pass</password></server>&#" $SETTINGS_FILE
     - git --version
-    - NAME=`mvn help:evaluate -Dexpression=project.name -q -DforceStdout`
-    - VERSION=`mvn help:evaluate -Dexpression=project.version -q -DforceStdout`
-    - PACKAGING=`mvn help:evaluate -Dexpression=project.packaging -q -DforceStdout`
+    - NAME=`mvn help:evaluate -Dexpression=project.name -q -DforceStdout -s settings.xml`
+    - VERSION=`mvn help:evaluate -Dexpression=project.version -q -DforceStdout -s settings.xml`
+    - PACKAGING=`mvn help:evaluate -Dexpression=project.packaging -q -DforceStdout -s settings.xml`
     - echo 名称：$NAME
     - echo 版本：$VERSION
     - echo 包：$PACKAGING
@@ -27,7 +27,7 @@ deploy:
     - echo 当前分支：$CI_COMMIT_BRANCH
     - echo 主分支：$CI_DEFAULT_BRANCH
     - echo 项目路径：$CI_PROJECT_DIR
-    - mvn clean -U package source:jar javadoc:jar deploy -DskipTests && echo 发布完成
+    - mvn clean -U package source:jar javadoc:jar deploy -DskipTests -s settings.xml && echo 发布完成
   cache:
     key: "${CI_JOB_NAME}"
     paths:
