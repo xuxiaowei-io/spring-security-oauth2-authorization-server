@@ -47,6 +47,7 @@
 |--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-----------|-----------|--------------|--------------------|-------------------|--------------------------------------------------------------------------------|
 | 1.1.0-M2-jdk8-*                                                                                                                                                                                  | ✅        | ✅         | ❌         | 5.x.x        | 5.x.x              | 2.x.x             | 基于 spring-authorization-server 仓库中的 1.1.0-M2 标签，修改为支持 JDK 8、Spring Boot 2.x.x  |
 | 1.1.0-RC1-jdk8-*                                                                                                                                                                                 | ✅        | ✅         | ❌         | 5.x.x        | 5.x.x              | 2.x.x             | 基于 spring-authorization-server 仓库中的 1.1.0-RC1 标签，修改为支持 JDK 8、Spring Boot 2.x.x |
+| 1.1.0-jdk8-*                                                                                                                                                                                     | ✅        | ✅         | ❌         | 5.x.x        | 5.x.x              | 2.x.x             | 基于 spring-authorization-server 仓库中的 1.1.0 标签，修改为支持 JDK 8、Spring Boot 2.x.x     |
 
 | [io.xuxiaowei.security.next:spring-security-oauth2-authorization-server](https://s01.oss.sonatype.org/content/repositories/public/io/xuxiaowei/security/next/spring-security-oauth2-authorization-server/) | 支持 JDK 8 | 支持 JDK 11 | 支持 JDK 17 | 支持 Spring 版本 | 支持 Spring Security | 支持 Spring Boot 版本 | 说明 |
 |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|-----------|-----------|--------------|--------------------|-------------------|----|
@@ -58,6 +59,14 @@
 ```shell
 gradlew :spring-security-oauth2-authorization-server:dependencies > D:\spring-authorization-server.txt
 ```
+
+## 流水线
+
+- 当前流水线：[极狐GitLab](https://jihulab.com/xuxiaowei-io/spring-security-oauth2-authorization-server/-/pipelines)
+    - 国内版 GitLab，开源项目：不限制流水线使用时长
+- 历史流水线：[GitLab](https://gitlab.com/xuxiaowei-io/spring-security-oauth2-authorization-server/-/pipelines)
+    - 国际版 GitLab，开源项目：每个群组（用户）每个月400分钟
+    - 以后不再使用
 
 ## 批量添加远端仓库地址
 
